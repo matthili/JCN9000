@@ -43,26 +43,30 @@ def _make_dataset(
     X: np.ndarray,
     masks: np.ndarray,
     actions: np.ndarray,
+    rewards: np.ndarray,
     batch_size: int,
     shuffle: bool,
     seed: int,
 ) -> tf.data.Dataset:
-    """Baut ein tf.data.Dataset, das den GPU-Speicher nicht ueberlaeuft.
+    """Baut ein tf.data.Dataset mit Policy- und Value-Targets.
+
+    Liefert pro Sample:
+        inputs = {"state": x, "mask": m}
+        targets = {"policy": action, "value": reward}
 
     KRITISCH: from_tensor_slices muss innerhalb von tf.device('/CPU:0') aufgerufen
     werden. Sonst versucht TF, die kompletten Arrays als Konstanten auf die GPU
     zu schieben (mehrere GB), was bei groesseren Datasets immer scheitert
     ("Dst tensor is not initialized").
-
-    Mit dem CPU-Scope bleiben die Daten im CPU-RAM; nur die Batches werden zur
-    GPU prefetched.
     """
     with tf.device("/CPU:0"):
         ds = tf.data.Dataset.from_tensor_slices(
-            ({"state": X, "mask": masks}, actions)
+            (
+                {"state": X, "mask": masks},
+                {"policy": actions, "value": rewards},
+            )
         )
         if shuffle:
-            # Shuffle-Buffer 100k: gute Mischung ohne RAM-Sprengung
             ds = ds.shuffle(
                 buffer_size=100_000, seed=seed, reshuffle_each_iteration=True
             )
@@ -95,16 +99,18 @@ def train(
     )
     model.summary(print_fn=lambda s: print("  " + s))
 
+    # Bei Multi-Output-Modellen heisst die Metric "val_policy_accuracy" statt "val_accuracy"
+    monitor_metric = "val_policy_accuracy"
     callbacks = [
         keras.callbacks.ModelCheckpoint(
             filepath=str(output_dir / "best.keras"),
-            monitor="val_accuracy",
+            monitor=monitor_metric,
             mode="max",
             save_best_only=True,
             verbose=1,
         ),
         keras.callbacks.EarlyStopping(
-            monitor="val_accuracy",
+            monitor=monitor_metric,
             mode="max",
             patience=patience,
             restore_best_weights=True,
@@ -122,11 +128,11 @@ def train(
 
     print(f"\nTraining startet: epochs={epochs}, batch_size={batch_size}")
     train_ds = _make_dataset(
-        split.train.X, split.train.masks, split.train.actions,
+        split.train.X, split.train.masks, split.train.actions, split.train.rewards,
         batch_size=batch_size, shuffle=True, seed=seed,
     )
     val_ds = _make_dataset(
-        split.val.X, split.val.masks, split.val.actions,
+        split.val.X, split.val.masks, split.val.actions, split.val.rewards,
         batch_size=batch_size, shuffle=False, seed=seed,
     )
     start = time.perf_counter()
@@ -148,8 +154,13 @@ def train(
     # Trainings-Historie als JSON
     hist_dict = {k: [float(x) for x in v] for k, v in history.history.items()}
     (output_dir / "history.json").write_text(json.dumps(hist_dict, indent=2))
-    best_val_acc = max(hist_dict.get("val_accuracy", [0.0]))
-    print(f"Beste val_accuracy: {best_val_acc:.4f}")
+    # Multi-Output-Modell: val_policy_accuracy; Legacy-Modell: val_accuracy
+    acc_key = "val_policy_accuracy" if "val_policy_accuracy" in hist_dict else "val_accuracy"
+    best_val_acc = max(hist_dict.get(acc_key, [0.0]))
+    print(f"Beste {acc_key}: {best_val_acc:.4f}")
+    if "val_value_mae" in hist_dict:
+        best_val_mae = min(hist_dict["val_value_mae"])
+        print(f"Beste val_value_mae: {best_val_mae:.4f}")
 
 
 def main():

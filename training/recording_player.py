@@ -2,7 +2,10 @@
 
 Der Wrapper delegiert alle Entscheidungen an einen "inneren" Player (z.B.
 `HeuristicPlayer`), zeichnet aber bei jedem `choose_card`-Aufruf den Featurevektor,
-die Aktionsmaske und die gewählte Karte auf.
+die Aktionsmaske, die gewählte Karte und den Spieler-Index (player_idx) auf.
+
+Der player_idx wird gebraucht, um spaeter (am Rundenende) den richtigen Reward
+fuer dieses Sample zu bestimmen: was ist das Resultat fuer das Team dieses Spielers?
 """
 
 from __future__ import annotations
@@ -19,7 +22,12 @@ from training.encoder import (
 
 
 class RecordingPlayer(Player):
-    """Schreibt pro choose_card-Aufruf einen Trainingsdatensatz mit."""
+    """Schreibt pro choose_card-Aufruf einen Trainingsdatensatz mit.
+
+    Zusaetzlich werden player_idx und round_idx aufgezeichnet, damit der Caller
+    nach Abschluss einer Runde fuer alle Samples den richtigen Reward einsetzen kann
+    (siehe generate_data.py).
+    """
 
     def __init__(self, inner: Player):
         super().__init__(inner.name)
@@ -28,11 +36,15 @@ class RecordingPlayer(Player):
         self.states: list = []
         self.masks: list = []
         self.actions: list = []
+        self.player_indices: list[int] = []
+        self.round_indices: list[int] = []
 
     def reset(self) -> None:
         self.states.clear()
         self.masks.clear()
         self.actions.clear()
+        self.player_indices.clear()
+        self.round_indices.clear()
 
     def choose_announcement(
         self,
@@ -50,6 +62,8 @@ class RecordingPlayer(Player):
         self.states.append(x)
         self.masks.append(mask)
         self.actions.append(action_index(chosen))
+        self.player_indices.append(state.player_idx)
+        self.round_indices.append(state.round_idx)
         return chosen
 
     def announce_weise(

@@ -49,7 +49,18 @@ class NNPlayer(Player):
     def choose_card(self, hand: list[Card], state: GameState) -> Card:
         x = encode_state(hand, state)[np.newaxis, :].astype(np.float32)
         mask = legal_action_mask(hand, state)[np.newaxis, :].astype(np.float32)
-        probs = self.model.predict({"state": x, "mask": mask}, verbose=0)[0]
+        prediction = self.model.predict({"state": x, "mask": mask}, verbose=0)
+
+        # Multi-Output-Modell liefert dict mit "policy" und "value";
+        # Legacy-Modell liefert direkt das Policy-Array.
+        if isinstance(prediction, dict):
+            probs = prediction["policy"][0]
+        elif isinstance(prediction, (list, tuple)) and len(prediction) >= 1:
+            # Bei manchen Keras-Versionen kommen Multi-Outputs als Liste
+            probs = prediction[0][0]
+        else:
+            probs = prediction[0]
+
         if self.greedy:
             chosen_idx = int(np.argmax(probs))
         else:

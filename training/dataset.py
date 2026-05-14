@@ -2,6 +2,10 @@
 
 Lädt alle .npz-Shards aus einem Verzeichnis, hält sie im RAM (typisch ~10 GB bei 50k
 Partien) und splittet in Train/Val.
+
+Unterstuetzt beide Datenformate:
+  - Legacy (v0.1.0): X, masks, actions  -> reward = 0 als Fallback
+  - Neu (v0.2.0+):   X, masks, actions, rewards
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ class Dataset:
     X: np.ndarray         # (N, 132) float32
     masks: np.ndarray     # (N, 36) float32 (für TF: float, nicht uint8)
     actions: np.ndarray   # (N,) int32
+    rewards: np.ndarray   # (N,) float32 -- normalisierter Round-Outcome
 
     def __len__(self) -> int:
         return len(self.X)
@@ -33,16 +38,22 @@ def load_shards(data_dir: str | Path) -> list[Path]:
 
 
 def _load_concat(shards: list[Path]) -> Dataset:
-    Xs, ms, ys = [], [], []
+    Xs, ms, ys, rs = [], [], [], []
     for s in shards:
         d = np.load(s)
         Xs.append(d["X"])
         ms.append(d["masks"])
         ys.append(d["actions"])
+        # Reward ist erst ab v0.2.0 vorhanden -- Legacy-Shards bekommen 0
+        if "rewards" in d.files:
+            rs.append(d["rewards"])
+        else:
+            rs.append(np.zeros(len(d["actions"]), dtype=np.float32))
     X = np.concatenate(Xs).astype(np.float32, copy=False)
     masks = np.concatenate(ms).astype(np.float32, copy=False)  # für TF
     actions = np.concatenate(ys).astype(np.int32, copy=False)
-    return Dataset(X=X, masks=masks, actions=actions)
+    rewards = np.concatenate(rs).astype(np.float32, copy=False)
+    return Dataset(X=X, masks=masks, actions=actions, rewards=rewards)
 
 
 def load_split(

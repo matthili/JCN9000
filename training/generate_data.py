@@ -1,13 +1,17 @@
-"""Datengenerator: simuliert Partien mit dem HeuristicPlayer und speichert (state, mask, action).
+"""Datengenerator: simuliert Partien mit dem HeuristicPlayer und speichert
+(state, mask, action, reward).
 
 Aufruf:
     python -m training.generate_data --games 10000 --output data/heuristic_train
     python -m training.generate_data --games 100000 --shard-size 1000 --workers 16
 
 Output: ein oder mehrere .npz-Dateien im angegebenen Verzeichnis mit den Arrays
-    X      : (N, INPUT_DIM)  float32  — Featurevektoren
-    masks  : (N, ACTION_DIM) uint8    — legale Aktionsmasken (1=erlaubt)
-    actions: (N,)            uint8    — gewählter Aktionsindex 0..35
+    X       : (N, INPUT_DIM)  float32  — Featurevektoren
+    masks   : (N, ACTION_DIM) uint8    — legale Aktionsmasken (1=erlaubt)
+    actions : (N,)            uint8    — gewaehlter Aktionsindex 0..35
+    rewards : (N,)            float32  — Round-Outcome aus Sicht des spielenden Spielers,
+                                         normalisiert in [-1, +1]
+                                         (eigene_Punkte - Gegner_Punkte) / 200
 
 Wichtig fuer Performance: jeder Worker schreibt seinen Shard **direkt zur Disk**.
 Der Master sammelt nur Dateipfade + Sample-Count, kein Massendaten-Transfer ueber
@@ -26,10 +30,16 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from jass_engine.variants.kreuz_jass import play_kreuz_jass
+from jass_engine.variants.kreuz_jass import KREUZ_JASS_TEAMS, play_kreuz_jass
 from players.heuristic_player import HeuristicPlayer
 from training.encoder import ACTION_DIM, INPUT_DIM
 from training.recording_player import RecordingPlayer
+
+
+# Skalierungs-Konstante fuer die Reward-Normalisierung.
+# Eine Differenz von 200 Stichpunkten pro Runde ist schon sehr deutlich
+# (Halbierung der maximalen 157 + Matsch). Damit liegen die Rewards typisch in [-1, +1].
+REWARD_SCALE = 200.0
 
 
 @dataclass
@@ -47,11 +57,19 @@ def _simulate_and_save(
     target_score: int,
     output_path: Path,
 ) -> ShardResult:
-    """Spielt `num_games` Partien, speichert Shard direkt zur Disk."""
+    """Spielt `num_games` Partien, speichert Shard direkt zur Disk.
+
+    Pro Sample wird der **Reward** der Runde mitgeschrieben: das ist die normalisierte
+    Punkte-Differenz zwischen eigenem Team und Gegner in jener Runde, in der das
+    Sample gespielt wurde. Damit kann das Modell spaeter einen Value-Head darauf
+    trainieren.
+    """
     rng = random.Random(seed)
+    teams = list(KREUZ_JASS_TEAMS)
     all_states: list[np.ndarray] = []
     all_masks: list[np.ndarray] = []
     all_actions: list[int] = []
+    all_rewards: list[float] = []
 
     for _ in range(num_games):
         players = [
@@ -63,27 +81,50 @@ def _simulate_and_save(
             )
             for i in range(4)
         ]
-        play_kreuz_jass(
+        game = play_kreuz_jass(
             players,
             target_score=target_score,
             rng=random.Random(rng.randint(0, 10**9)),
         )
+
+        # Pro Runde: Reward fuer beide Teams berechnen
+        # round_rewards[round_idx][team_id] = (team_points - opp_points) / REWARD_SCALE
+        round_rewards: list[dict[int, float]] = []
+        for rnd in game.rounds:
+            team_ids = list(rnd.team_total_points.keys())
+            round_dict = {}
+            for tid in team_ids:
+                own_pts = rnd.team_total_points[tid]
+                opp_pts = sum(p for t, p in rnd.team_total_points.items() if t != tid)
+                round_dict[tid] = (own_pts - opp_pts) / REWARD_SCALE
+            round_rewards.append(round_dict)
+
         for p in players:
-            all_states.extend(p.states)
-            all_masks.extend(p.masks)
-            all_actions.extend(p.actions)
+            for st, mk, ac, p_idx, r_idx in zip(
+                p.states, p.masks, p.actions, p.player_indices, p.round_indices
+            ):
+                team_id = teams[p_idx]
+                reward = round_rewards[r_idx][team_id] if r_idx < len(round_rewards) else 0.0
+                all_states.append(st)
+                all_masks.append(mk)
+                all_actions.append(ac)
+                all_rewards.append(reward)
 
     if all_states:
         X = np.stack(all_states).astype(np.float32, copy=False)
         masks = np.stack(all_masks).astype(np.uint8, copy=False)
         actions = np.array(all_actions, dtype=np.uint8)
+        rewards = np.array(all_rewards, dtype=np.float32)
     else:
         X = np.empty((0, INPUT_DIM), dtype=np.float32)
         masks = np.empty((0, ACTION_DIM), dtype=np.uint8)
         actions = np.empty((0,), dtype=np.uint8)
+        rewards = np.empty((0,), dtype=np.float32)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(output_path, X=X, masks=masks, actions=actions)
+    np.savez_compressed(
+        output_path, X=X, masks=masks, actions=actions, rewards=rewards
+    )
     return ShardResult(path=output_path, num_samples=len(actions), num_games=num_games)
 
 
