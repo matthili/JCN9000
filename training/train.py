@@ -83,6 +83,7 @@ def train(
     learning_rate: float = 1e-3,
     patience: int = 5,
     seed: int = 42,
+    verbose: int = 2,
 ) -> None:
     configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -141,7 +142,7 @@ def train(
         validation_data=val_ds,
         epochs=epochs,
         callbacks=callbacks,
-        verbose=1,
+        verbose=verbose,
     )
     elapsed = time.perf_counter() - start
     print(f"\nTraining fertig in {elapsed / 60:.1f} min.")
@@ -173,6 +174,11 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--verbose", type=int, default=2, choices=[0, 1, 2],
+        help="0=still, 1=Live-Progressbar (kann auf WSL2/non-TTY langsam sein), "
+             "2=eine Zeile pro Epoche (Default, empfohlen)",
+    )
     args = parser.parse_args()
 
     train(
@@ -184,6 +190,7 @@ def main():
         learning_rate=args.learning_rate,
         patience=args.patience,
         seed=args.seed,
+        verbose=args.verbose,
     )
 
 
