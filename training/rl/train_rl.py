@@ -1,29 +1,39 @@
 """RL-Hauptschleife: Self-Play -> Trajektorien-Sammlung -> PPO-Update -> Snapshot.
 
 Aufruf:
-    # Schneller Smoke-Test (1 Iteration, 4 Partien, kein vollwertiges Training)
+    # Erster Lauf -- startet aus dem BC-Warmstart-Modell
     python -m training.rl.train_rl --warm-start models/v3/best.keras \
-        --iterations 1 --games-per-iter 4 --target 200
-
-    # Echter Run (Iteration heisst hier: ein Sammel/Update-Zyklus)
-    python -m training.rl.train_rl --warm-start models/v3/best.keras \
-        --iterations 100 --games-per-iter 64 --target 500 \
+        --iterations 50 --games-per-iter 16 --target 500 \
         --output models/rl_v1
+
+    # Spaeter weitermachen -- haengt automatisch an den bestehenden Stand an
+    # Das output_dir existiert schon mit state.json drin -> Resume passiert automatisch
+    python -m training.rl.train_rl --iterations 50 --games-per-iter 16 \
+        --target 500 --output models/rl_v1
+
+Resume:
+  Wenn `<output>/state.json` existiert, wird der bestehende Stand aus
+  `<output>/final.keras` geladen, der Iterations-Counter laeuft weiter, und
+  log.csv wird angefuegt. `--warm-start` wird in diesem Fall IGNORIERT
+  (das laufende Training hat Vorrang).
 
 Ein Run produziert:
     output_dir/
         ├── iter_00000.keras   Snapshot nach Iteration 0
         ├── iter_00010.keras   ...alle 10 Iterationen
-        ├── final.keras        Letzter Stand
-        ├── log.csv            Loss/Entropy/KL pro Iteration
-        └── elo.json           Elo-Verlauf gegen frueheren Snapshots
+        ├── final.keras        Aktuellster Stand (wird bei Resume wieder geladen)
+        ├── state.json         Iterations-Counter fuer Resume
+        ├── log.csv            Loss/Entropy/KL pro Iteration (wird bei Resume erweitert)
+        └── elo.json           Elo-Verlauf gegen frueheren Snapshots (kommt spaeter)
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +45,25 @@ from training.model import MaskBias, build_model  # noqa: F401 (MaskBias-Registr
 from training.rl.ppo import ppo_train_step
 from training.rl.selfplay import collect_trajectories
 from training.rl.trajectory import compute_gae, stack_trajectories
+
+
+STATE_FILENAME = "state.json"
+LOG_FILENAME = "log.csv"
+
+
+def _load_state(output_dir: Path) -> dict | None:
+    state_path = output_dir / STATE_FILENAME
+    if not state_path.exists():
+        return None
+    return json.loads(state_path.read_text(encoding="utf-8"))
+
+
+def _save_state(output_dir: Path, state: dict) -> None:
+    state_path = output_dir / STATE_FILENAME
+    state_path.write_text(
+        json.dumps(state, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 
 def configure_gpu_memory() -> None:
@@ -50,11 +79,11 @@ def configure_gpu_memory() -> None:
     print(f"RL-Training auf {len(gpus)} GPU(s) mit Memory-Growth aktiviert.")
 
 
-def _load_or_build_model(warm_start: Path | None) -> tf.keras.Model:
-    if warm_start is not None and warm_start.exists():
-        print(f"Lade Warmstart-Modell: {warm_start}")
-        return keras.models.load_model(str(warm_start))
-    print("Kein Warmstart -- baue frisches Modell.")
+def _load_or_build_model(model_path: Path | None) -> tf.keras.Model:
+    if model_path is not None and model_path.exists():
+        print(f"Lade Modell: {model_path}")
+        return keras.models.load_model(str(model_path))
+    print("Kein Modell-Pfad gegeben oder Datei existiert nicht -- baue frisches Modell.")
     return build_model(with_value_head=True)
 
 
@@ -84,21 +113,49 @@ def run(
     configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    model = _load_or_build_model(warm_start)
+    # Resume-Logik
+    existing_state = _load_state(output_dir)
+    if existing_state is not None:
+        last_iter = int(existing_state.get("last_completed_iter", -1))
+        total_partien_before = int(existing_state.get("total_partien", 0))
+        start_iter = last_iter + 1
+        resume_model = output_dir / "final.keras"
+        if not resume_model.exists():
+            raise FileNotFoundError(
+                f"state.json gefunden in {output_dir}, aber final.keras fehlt. "
+                f"Kann nicht resumen."
+            )
+        print(
+            f"\n=== Resume erkannt: starte bei Iteration {start_iter} "
+            f"(bisher {total_partien_before} Self-Play-Partien) ===\n"
+        )
+        if warm_start is not None:
+            print(f"  Hinweis: --warm-start {warm_start} wird ignoriert; "
+                  f"resume aus {resume_model}.")
+        model = _load_or_build_model(resume_model)
+    else:
+        start_iter = 0
+        total_partien_before = 0
+        model = _load_or_build_model(warm_start)
+
     optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
-    log_path = output_dir / "log.csv"
-    log_file = log_path.open("w", newline="", encoding="utf-8")
+    log_path = output_dir / LOG_FILENAME
+    log_exists = log_path.exists()
+    log_file = log_path.open("a", newline="", encoding="utf-8")
     writer = csv.writer(log_file)
-    writer.writerow([
-        "iter", "games", "transitions", "policy_loss", "value_loss",
-        "entropy", "approx_kl", "grad_norm", "mean_reward", "sec",
-    ])
+    if not log_exists:
+        writer.writerow([
+            "iter", "games", "transitions", "policy_loss", "value_loss",
+            "entropy", "approx_kl", "grad_norm", "mean_reward", "sec",
+            "timestamp",
+        ])
 
-    for it in range(iterations):
+    end_iter = start_iter + iterations
+    for it in range(start_iter, end_iter):
         t0 = time.perf_counter()
         if verbose >= 1:
-            print(f"\n=== RL-Iteration {it + 1}/{iterations} ===")
+            print(f"\n=== RL-Iteration {it + 1} (in dieser Session {it - start_iter + 1}/{iterations}) ===")
 
         # 1) Self-Play
         trajs = collect_trajectories(
@@ -168,20 +225,30 @@ def run(
             last_metrics.get("grad_norm", 0),
             mean_reward,
             total_secs,
+            datetime.now(timezone.utc).isoformat(),
         ])
         log_file.flush()
 
-        # 4) Snapshot
-        if (it % snapshot_every == 0) or (it == iterations - 1):
+        # 4) Snapshot + state.json + final.keras (immer letzten Stand persistieren)
+        _save_snapshot(model, output_dir / "final.keras")
+        if (it % snapshot_every == 0) or (it == end_iter - 1):
             snap = output_dir / f"iter_{it:05d}.keras"
             _save_snapshot(model, snap)
             if verbose >= 1:
                 print(f"  Snapshot: {snap}")
+        _save_state(output_dir, {
+            "last_completed_iter": it,
+            "total_partien": total_partien_before + (it - start_iter + 1) * games_per_iter,
+            "last_session_timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
-    # Final-Modell
-    _save_snapshot(model, output_dir / "final.keras")
     log_file.close()
-    print(f"\nRL-Training fertig. Final-Modell: {output_dir / 'final.keras'}")
+    print(
+        f"\nRL-Training-Session fertig. "
+        f"Letzte Iteration: {end_iter - 1}. "
+        f"Stand: {output_dir / 'final.keras'}"
+    )
+    print(f"  Weitermachen: nochmal denselben Aufruf -- Resume passiert automatisch.")
 
 
 def main():
