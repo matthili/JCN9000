@@ -188,6 +188,75 @@ python -m scripts.generate_encoding_fixtures
 
 Die CI-Pipeline (siehe [`.github/workflows/test.yml`](.github/workflows/test.yml)) verifiziert, dass die committeten Spec-Dateien synchron mit dem Code sind — Drift ist strukturell ausgeschlossen.
 
+## Ein neues Release veröffentlichen
+
+Ein "Release" ist im GitHub-Sinne eine **versionierte, eingefrorene Veröffentlichung** dieses Projekts, an die eine herunterladbare ZIP-Datei angehängt wird. Diese ZIP-Datei (im englischen Sprachgebrauch "Asset" = "Anhang") enthält alles, was die separate Web-Anwendung braucht: Regel-Spezifikation, Encoder-Doku, Test-Fixtures und das trainierte Modell. Über eine feste URL kann die Web-App genau diese ZIP-Datei beim Build herunterladen.
+
+### Voraussetzungen einmalig
+
+- **GitHub-CLI** installieren: <https://cli.github.com/>
+- Einmal anmelden: `gh auth login`
+- TensorFlow.js-Konverter installieren: `pip install tensorflowjs`
+
+### Release in einem Befehl
+
+Lokal ein Modell trainieren (mit voller Hardware-Power, beliebig groß), dann:
+
+```powershell
+python -m scripts.make_release --version v0.1.0
+```
+
+Das Skript läuft folgende Schritte ab und fragt vor dem Pushen ausdrücklich nach Bestätigung:
+
+1. **Vorprüfung**: working tree sauber, richtiger Branch (`master`), Tag noch frei, `gh` angemeldet
+2. **Tests laufen lassen** (gegen das Repo)
+3. **Spec-Drift prüfen**: `spec/`-Dateien werden neu generiert und müssen unverändert sein
+4. **TF.js-Export**: `models/v1/best.keras` → `models/v1/tfjs/` (falls noch nicht geschehen)
+5. **ZIP bauen** mit allen Artefakten + MANIFEST.json (SHA256-Hashes)
+6. **Bestätigung abwarten** — bis hierhin wurde nichts an GitHub gesendet
+7. **Git-Tag erstellen und pushen**
+8. **GitHub-Release erstellen** und ZIP als Anhang anhängen
+
+### Trockenlauf (zum Testen)
+
+```powershell
+python -m scripts.make_release --version v0.1.0 --dry-run
+```
+
+Macht Schritte 1–5, baut das ZIP unter `dist/`, **erstellt aber keinen Tag und kein Release**. Gut zum Anschauen, ob das ZIP so aussieht, wie es soll.
+
+### Nachträglich Assets anhängen
+
+Wenn du nach einem Release zum Beispiel ein noch besser trainiertes Modell als zusätzlichen Anhang zur Verfügung stellen willst:
+
+```powershell
+# Lokal ein zweites ZIP bauen, z.B. mit anderem Namen
+python -m scripts.build_release_zip --version v0.1.0-full `
+    --model models/v2/best.keras --tfjs-dir models/v2/tfjs `
+    --output dist/jass-nn-v0.1.0-full.zip
+
+# An das bestehende Release anhängen
+gh release upload v0.1.0 dist/jass-nn-v0.1.0-full.zip --repo matthili/jass-neuronales-netz
+```
+
+### Wie die Web-App das Release nutzt
+
+Im Build-Schritt der Web-Anwendung (z.B. in einer GitHub-Actions-Pipeline):
+
+```bash
+# ZIP des gepinnten Releases herunterladen
+gh release download v0.1.0 \
+    --repo matthili/jass-neuronales-netz \
+    --pattern "jass-nn-*.zip"
+
+# Auspacken in einen festen Pfad
+unzip jass-nn-v0.1.0.zip -d external/jass-nn/
+```
+
+Anschließend liegen `jass_rules.json`, `state_encoding.md`, `tfjs/model.json` usw. unter `external/jass-nn/jass-nn-v0.1.0/` bereit. Die Web-App referenziert diese Dateien direkt.
+
+Damit hat die Web-App **eine einzige, versionierte Quelle** für Spielregeln und Modell. Aktualisieren bedeutet nur, im Build-Skript die Versionsnummer zu erhöhen — keine kopierten Dateien, kein Drift.
+
 ## Roadmap
 
 - [x] Spielengine mit allen Varianten
@@ -195,7 +264,7 @@ Die CI-Pipeline (siehe [`.github/workflows/test.yml`](.github/workflows/test.yml
 - [x] Trainings-Pipeline (Encoder, Datengenerator, MLP, Trainings-Loop)
 - [x] NN-Player auf Augenhöhe mit Heuristik (Behavioral Cloning)
 - [x] Schnittstellen-Spec für separate Web-App
-- [ ] TF.js-Export-Skript + GitHub-Release-Workflow
+- [x] TF.js-Export + lokaler Release-Befehl (`scripts/make_release.py`)
 - [ ] Größeres Modell trainieren (mehr Daten, ggf. mit GPU via WSL2)
 - [ ] Reinforcement Learning (Self-Play) für stärkeren Bot
 - [ ] Steigern-Variante (Bieter-Jass)

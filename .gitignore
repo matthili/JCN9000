@@ -129,3 +129,4 @@ credentials.json
 *.bak
 *.orig
 .cache/
+dist/
