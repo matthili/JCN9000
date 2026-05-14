@@ -144,29 +144,60 @@ def collect_trajectories(
     num_games: int = 100,
     target_score: int = 200,
     seed: int = 42,
+    heuristic_mix_rate: float = 0.0,
 ) -> list[Trajectory]:
-    """Spielt num_games Self-Play-Partien (4 RL-Spieler) und sammelt deren Trajektorien.
+    """Spielt num_games Partien und sammelt RL-Spieler-Trajektorien.
 
-    Returns:
-        Liste von Trajectories -- 4 pro Partie, also 4*num_games insgesamt.
+    Args:
+        model: Das NN, mit dem die RL-Spieler entscheiden.
+        num_games: Anzahl Partien insgesamt.
+        target_score: Punkteziel pro Partie (1000 ueblich).
+        seed: RNG-Seed.
+        heuristic_mix_rate: Anteil der Partien, in denen RL nur 2 Spieler stellt
+            (das andere Team ist HeuristicPlayer). Default 0 = pure Self-Play.
+            Sinnvolle Werte ~0.2-0.4 als Anti-Drift-Anker.
+
+    Setup pro Partie:
+        - "pure" (Wahrscheinlichkeit 1 - heuristic_mix_rate):
+            4 RL-Spieler -> 4 Trajektorien
+        - "mix" (Wahrscheinlichkeit heuristic_mix_rate):
+            2 RL + 2 Heuristik, RL-Team zufaellig 0 oder 1 -> 2 Trajektorien
     """
     rng = random.Random(seed)
     teams = list(KREUZ_JASS_TEAMS)
     all_trajectories: list[Trajectory] = []
 
-    for _ in range(num_games):
-        players = [
-            RLPlayer(name=f"RL{i}", model=model)
-            for i in range(4)
-        ]
+    for game_idx in range(num_games):
+        # Mix-Game oder Pure-Selfplay?
+        is_mix = rng.random() < heuristic_mix_rate
+        if is_mix:
+            rl_team_id = rng.choice([0, 1])
+            players: list[Player] = []
+            for seat in range(4):
+                if teams[seat] == rl_team_id:
+                    players.append(RLPlayer(name=f"RL{seat}", model=model))
+                else:
+                    players.append(HeuristicPlayer(
+                        name=f"H{seat}",
+                        rng=random.Random(rng.randint(0, 10**9)),
+                    ))
+        else:
+            rl_team_id = None  # alle Sitze sind RL
+            players = [
+                RLPlayer(name=f"RL{i}", model=model)
+                for i in range(4)
+            ]
+
         game = play_kreuz_jass(
             players,
             target_score=target_score,
             rng=random.Random(rng.randint(0, 10**9)),
         )
 
-        # Pro Spieler die Reward-Liste basteln (eine Eintrag pro gespielte Runde dieses Spielers)
+        # Pro Spieler die Reward-Liste basteln (nur fuer RL-Spieler)
         for p_idx, player in enumerate(players):
+            if not isinstance(player, RLPlayer):
+                continue
             team_id = teams[p_idx]
             round_rewards = []
             for rnd in game.rounds:

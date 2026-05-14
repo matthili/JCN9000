@@ -109,6 +109,7 @@ def run(
     snapshot_every: int,
     seed: int,
     verbose: int,
+    heuristic_mix_rate: float = 0.3,
 ) -> None:
     configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -157,12 +158,13 @@ def run(
         if verbose >= 1:
             print(f"\n=== RL-Iteration {it + 1} (in dieser Session {it - start_iter + 1}/{iterations}) ===")
 
-        # 1) Self-Play
+        # 1) Self-Play (ggf. mit Heuristik-Anker als Anti-Drift)
         trajs = collect_trajectories(
             model=model,
             num_games=games_per_iter,
             target_score=target_score,
             seed=seed + it,
+            heuristic_mix_rate=heuristic_mix_rate,
         )
         sp_secs = time.perf_counter() - t0
         n_transitions = sum(len(t) for t in trajs)
@@ -269,6 +271,11 @@ def main():
     parser.add_argument("--snapshot-every", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
+    parser.add_argument(
+        "--heuristic-mix-rate", type=float, default=0.3,
+        help="Anteil Partien (0..1), in denen das RL-Team gegen 2 Heuristik-Gegner "
+             "spielt. Als Anti-Drift-Anker bei Self-Play. Default 0.3.",
+    )
     args = parser.parse_args()
 
     run(
@@ -288,6 +295,7 @@ def main():
         snapshot_every=args.snapshot_every,
         seed=args.seed,
         verbose=args.verbose,
+        heuristic_mix_rate=args.heuristic_mix_rate,
     )
 
 

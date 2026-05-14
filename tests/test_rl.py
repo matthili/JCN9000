@@ -144,3 +144,29 @@ def test_selfplay_eine_partie_produziert_trajektorien():
         # Letzte Transition jeder Runde ist done
         # (Nicht zwingend die allerletzte der Trajektorie, aber mindestens eine done)
         assert any(t.done for t in tr.transitions)
+
+
+def test_selfplay_mit_heuristik_mix_liefert_weniger_trajektorien_pro_partie():
+    """Bei heuristic_mix_rate=1.0 sind in jeder Partie nur 2 RL-Spieler -> nur 2 Trajektorien."""
+    from training.rl.selfplay import collect_trajectories
+
+    model = build_model(with_value_head=True)
+    # 3 Partien, 100% Mix: jede Partie 2 RL + 2 Heuristik
+    trajs = collect_trajectories(
+        model=model, num_games=3, target_score=100, seed=42,
+        heuristic_mix_rate=1.0,
+    )
+    # 3 Partien * 2 RL-Spieler = 6 Trajektorien
+    assert len(trajs) == 6, f"Erwartete 6 Trajektorien, bekam {len(trajs)}"
+
+
+def test_selfplay_mix_rate_null_ist_pure_selfplay():
+    """Bei heuristic_mix_rate=0.0 sind alle 4 Spieler RL -> 4 Trajektorien pro Partie."""
+    from training.rl.selfplay import collect_trajectories
+
+    model = build_model(with_value_head=True)
+    trajs = collect_trajectories(
+        model=model, num_games=2, target_score=100, seed=42,
+        heuristic_mix_rate=0.0,
+    )
+    assert len(trajs) == 8  # 2 Partien * 4 RL-Spieler
