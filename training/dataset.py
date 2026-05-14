@@ -1,0 +1,79 @@
+"""Shard-Loader für Trainingsdaten.
+
+Lädt alle .npz-Shards aus einem Verzeichnis, hält sie im RAM (typisch ~10 GB bei 50k
+Partien) und splittet in Train/Val.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+
+@dataclass
+class Dataset:
+    X: np.ndarray         # (N, 132) float32
+    masks: np.ndarray     # (N, 36) float32 (für TF: float, nicht uint8)
+    actions: np.ndarray   # (N,) int32
+
+    def __len__(self) -> int:
+        return len(self.X)
+
+
+@dataclass
+class SplitDataset:
+    train: Dataset
+    val: Dataset
+
+
+def load_shards(data_dir: str | Path) -> list[Path]:
+    return sorted(Path(data_dir).glob("*.npz"))
+
+
+def _load_concat(shards: list[Path]) -> Dataset:
+    Xs, ms, ys = [], [], []
+    for s in shards:
+        d = np.load(s)
+        Xs.append(d["X"])
+        ms.append(d["masks"])
+        ys.append(d["actions"])
+    X = np.concatenate(Xs).astype(np.float32, copy=False)
+    masks = np.concatenate(ms).astype(np.float32, copy=False)  # für TF
+    actions = np.concatenate(ys).astype(np.int32, copy=False)
+    return Dataset(X=X, masks=masks, actions=actions)
+
+
+def load_split(
+    data_dir: str | Path,
+    val_fraction: float = 0.1,
+    seed: int = 42,
+) -> SplitDataset:
+    """Lädt alle Shards und splittet shard-weise in Train/Val.
+
+    Shard-weiser Split ist sauberer als sample-weiser: Partien werden nicht zerrissen,
+    und das Modell sieht in Val Spielzustände aus für es komplett neuen Partien.
+    """
+    shards = load_shards(data_dir)
+    if not shards:
+        raise FileNotFoundError(f"Keine .npz-Shards in {data_dir} gefunden.")
+
+    rng = np.random.default_rng(seed)
+    indices = np.arange(len(shards))
+    rng.shuffle(indices)
+
+    val_count = max(1, int(round(len(shards) * val_fraction)))
+    val_idx = set(indices[:val_count].tolist())
+    train_shards = [s for i, s in enumerate(shards) if i not in val_idx]
+    val_shards = [s for i, s in enumerate(shards) if i in val_idx]
+
+    print(f"Lade Daten: {len(train_shards)} Train-Shards, {len(val_shards)} Val-Shards…")
+    train = _load_concat(train_shards)
+    val = _load_concat(val_shards)
+    print(
+        f"  Train: {len(train):>10,} Samples "
+        f"({train.X.nbytes / 2**30:.2f} GB X + {train.masks.nbytes / 2**30:.2f} GB Masks)"
+    )
+    print(f"  Val:   {len(val):>10,} Samples")
+    return SplitDataset(train=train, val=val)

@@ -1,0 +1,63 @@
+[project]
+name = "jass-neuronales-netz"
+version = "0.1.0"
+description = "Vorarlberger Kreuz-Jass: regelgetreue Python-Engine, Heuristik-Bot, Trainings-Pipeline und neuronales Netz als KI-Gegner für eine separate Web-Anwendung."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+keywords = [
+    "jass",
+    "kreuz-jass",
+    "vorarlberg",
+    "card-game",
+    "neural-network",
+    "tensorflow",
+    "reinforcement-learning",
+    "behavioral-cloning",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: German",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment :: Board Games",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "rich>=13.0",
+    "streamlit>=1.30",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+training = [
+    "tensorflow>=2.19",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "jsonschema>=4.0",
+]
+
+[project.urls]
+# Repository = "https://github.com/<your-user>/jass-neuronales-netz"
+# Issues = "https://github.com/<your-user>/jass-neuronales-netz/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["jass_engine", "players", "visualization", "training", "evaluation"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v"

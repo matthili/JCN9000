@@ -1,0 +1,131 @@
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / Build
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ============================================================
+# Virtual Environments
+# ============================================================
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ============================================================
+# Testing / Coverage
+# ============================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ============================================================
+# ML-spezifisch — gehört NICHT ins Git
+# ============================================================
+# Generierte Trainingsdaten (mehrere hundert MB pro Datensatz)
+data/*
+!data/README.md
+
+# Trainierte Modelle (werden als GitHub-Release-Assets verteilt)
+models/*
+!models/README.md
+
+# Tensorboard- und sonstige Lauf-Logs
+runs/
+logs/
+*.log
+lightning_logs/
+
+# ============================================================
+# IDEs / Editoren
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ============================================================
+# Betriebssystem
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ============================================================
+# Claude / Tooling
+# ============================================================
+.claude/
+.cursor/
+.aider*
+
+# ============================================================
+# Jupyter
+# ============================================================
+.ipynb_checkpoints/
+*.ipynb
+
+# ============================================================
+# Secrets / Lokale Konfiguration
+# ============================================================
+.env
+.env.local
+.env.*.local
+secrets.json
+credentials.json
+*.pem
+*.key
+
+# ============================================================
+# Streamlit
+# ============================================================
+.streamlit/secrets.toml
+
+# ============================================================
+# Sonstiges
+# ============================================================
+*.tmp
+*.bak
+*.orig
+.cache/

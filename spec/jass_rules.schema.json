@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/your-org/jass-neuronales-netz/spec/jass_rules.schema.json",
+  "title": "Vorarlberger Kreuz-Jass Regel-Spezifikation",
+  "description": "JSON-Schema zur Validierung der jass_rules.json. Wird von Web-App / Engine-Implementierungen gelesen, um Konsistenz mit dem NN-Projekt zu garantieren.",
+  "type": "object",
+  "required": [
+    "spec_version",
+    "name",
+    "deck",
+    "special_cards",
+    "variants",
+    "scoring",
+    "weise",
+    "round_flow",
+    "game_flow",
+    "action_space"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semver-Version dieser Regel-Spezifikation."
+    },
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "sources": {
+      "type": "array",
+      "items": {"type": "string", "format": "uri"}
+    },
+    "deck": {
+      "type": "object",
+      "required": ["total_cards", "suits", "ranks", "card_index_formula", "index_range"],
+      "additionalProperties": false,
+      "properties": {
+        "total_cards": {"const": 36},
+        "suits": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/SuitDef"}
+        },
+        "ranks": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "items": {"$ref": "#/$defs/RankDef"}
+        },
+        "card_index_formula": {"type": "string"},
+        "index_range": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [{"const": 0}, {"const": 35}]
+        }
+      }
+    },
+    "special_cards": {
+      "type": "object",
+      "required": ["weli"],
+      "properties": {
+        "weli": {
+          "type": "object",
+          "required": ["suit", "rank", "card_index", "role"],
+          "properties": {
+            "suit": {"const": "SCHELLE"},
+            "rank": {"const": "SECHS"},
+            "card_index": {"type": "integer", "minimum": 0, "maximum": 35},
+            "role": {"type": "string"},
+            "note": {"type": "string"}
+          }
+        }
+      }
+    },
+    "variants": {
+      "type": "object",
+      "required": ["trumpf", "oben", "unten", "slalom"],
+      "properties": {
+        "trumpf": {"$ref": "#/$defs/TrumpfVariant"},
+        "oben": {"$ref": "#/$defs/SimpleVariant"},
+        "unten": {"$ref": "#/$defs/SimpleVariant"},
+        "slalom": {"$ref": "#/$defs/SlalomVariant"}
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "required": [
+        "card_points_per_round",
+        "last_trick_bonus",
+        "total_points_per_round",
+        "match_bonus"
+      ],
+      "properties": {
+        "card_points_per_round": {"const": 152},
+        "last_trick_bonus": {"const": 5},
+        "total_points_per_round": {"const": 157},
+        "match_bonus": {"const": 100},
+        "match_definition": {"type": "string"},
+        "team_scoring_convention": {"type": "string"}
+      }
+    },
+    "weise": {
+      "type": "object",
+      "required": ["sequences", "four_of_kind", "stoecke_points", "comparison_rules"],
+      "properties": {
+        "sequences": {
+          "type": "object",
+          "patternProperties": {
+            "^[0-9]+_blatt$": {"type": "integer", "minimum": 0}
+          }
+        },
+        "four_of_kind": {
+          "type": "object",
+          "patternProperties": {
+            "^(UNTER|NEUN|ZEHN|OBER|KOENIG|ASS)$": {"type": "integer", "minimum": 0}
+          }
+        },
+        "stoecke_points": {"const": 20},
+        "comparison_rules": {"type": "object"},
+        "announce_timing": {"type": "string"},
+        "stoecke_announce_timing": {"type": "string"}
+      }
+    },
+    "round_flow": {
+      "type": "object",
+      "required": ["num_players", "cards_per_player", "teams", "trump_announcement", "push", "tricks_per_round"],
+      "properties": {
+        "num_players": {"const": 4},
+        "cards_per_player": {"const": 9},
+        "teams": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0, "maximum": 3}
+          }
+        },
+        "team_count": {"const": 2},
+        "trump_announcement": {"type": "object"},
+        "push": {"type": "object"},
+        "tricks_per_round": {"const": 9},
+        "trick_start": {"type": "object"}
+      }
+    },
+    "game_flow": {
+      "type": "object",
+      "required": ["default_target_score"],
+      "properties": {
+        "default_target_score": {"type": "integer", "minimum": 100},
+        "target_score_configurable": {"type": "boolean"},
+        "winner": {"type": "string"}
+      }
+    },
+    "action_space": {
+      "type": "object",
+      "required": ["size", "encoding", "mask_semantics"],
+      "properties": {
+        "size": {"const": 36},
+        "encoding": {"type": "string"},
+        "mask_semantics": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "SuitDef": {
+      "type": "object",
+      "required": ["id", "name", "german"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "integer", "minimum": 0, "maximum": 3},
+        "name": {"type": "string", "enum": ["EICHEL", "SCHELLE", "HERZ", "LAUB"]},
+        "german": {"type": "string"}
+      }
+    },
+    "RankDef": {
+      "type": "object",
+      "required": ["id", "name", "german", "short"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "integer", "minimum": 0, "maximum": 8},
+        "name": {"type": "string", "enum": ["SECHS", "SIEBEN", "ACHT", "NEUN", "ZEHN", "UNTER", "OBER", "KOENIG", "ASS"]},
+        "german": {"type": "string"},
+        "short": {"type": "string"}
+      }
+    },
+    "TrumpfVariant": {
+      "type": "object",
+      "required": ["id", "has_trump_suit", "card_points", "rank_order_desc", "rules", "stoecke"],
+      "properties": {
+        "id": {"const": "trumpf"},
+        "german": {"type": "string"},
+        "has_trump_suit": {"const": true},
+        "trump_suit_options": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "card_points": {
+          "type": "object",
+          "required": ["non_trump", "trump"],
+          "properties": {
+            "non_trump": {"$ref": "#/$defs/RankPointMap"},
+            "trump": {"$ref": "#/$defs/RankPointMap"}
+          }
+        },
+        "rank_order_desc": {
+          "type": "object",
+          "required": ["non_trump", "trump"],
+          "properties": {
+            "non_trump": {"$ref": "#/$defs/RankOrder"},
+            "trump": {"$ref": "#/$defs/RankOrder"}
+          }
+        },
+        "rules": {"$ref": "#/$defs/Rules"},
+        "stoecke": {"$ref": "#/$defs/Stoecke"}
+      }
+    },
+    "SimpleVariant": {
+      "type": "object",
+      "required": ["id", "has_trump_suit", "card_points", "rank_order_desc", "rules", "stoecke"],
+      "properties": {
+        "id": {"type": "string", "enum": ["oben", "unten"]},
+        "german": {"type": "string"},
+        "has_trump_suit": {"const": false},
+        "card_points": {"$ref": "#/$defs/RankPointMap"},
+        "rank_order_desc": {
+          "type": "object",
+          "required": ["lead_suit"],
+          "properties": {
+            "lead_suit": {"$ref": "#/$defs/RankOrder"}
+          }
+        },
+        "rules": {"$ref": "#/$defs/Rules"},
+        "stoecke": {"$ref": "#/$defs/Stoecke"}
+      }
+    },
+    "SlalomVariant": {
+      "type": "object",
+      "required": ["id", "alternating_modes", "starter_chooses_first_mode"],
+      "properties": {
+        "id": {"const": "slalom"},
+        "german": {"type": "string"},
+        "alternating_modes": {
+          "type": "array",
+          "items": {"type": "string", "enum": ["oben", "unten"]}
+        },
+        "starter_chooses_first_mode": {"const": true},
+        "card_points_inherit_from": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "rules": {"type": "object"},
+        "stoecke": {"$ref": "#/$defs/Stoecke"}
+      }
+    },
+    "RankPointMap": {
+      "type": "object",
+      "required": ["SECHS", "SIEBEN", "ACHT", "NEUN", "ZEHN", "UNTER", "OBER", "KOENIG", "ASS"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(SECHS|SIEBEN|ACHT|NEUN|ZEHN|UNTER|OBER|KOENIG|ASS)$": {
+          "type": "integer", "minimum": 0
+        }
+      }
+    },
+    "RankOrder": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {
+        "type": "string",
+        "enum": ["SECHS", "SIEBEN", "ACHT", "NEUN", "ZEHN", "UNTER", "OBER", "KOENIG", "ASS"]
+      }
+    },
+    "Rules": {
+      "type": "object",
+      "properties": {
+        "follow_lead_suit_if_possible": {"type": "boolean"},
+        "buur_exception": {"type": "object"},
+        "no_undertrumping": {"type": "object"},
+        "stichzwang": {"type": "object"},
+        "note": {"type": "string"}
+      }
+    },
+    "Stoecke": {
+      "type": "object",
+      "required": ["active"],
+      "properties": {
+        "active": {"type": "boolean"},
+        "cards": {"type": "array", "items": {"type": "string"}},
+        "points": {"type": "integer", "minimum": 0},
+        "announce_timing": {"type": "string"},
+        "competes_with_other_weisen": {"type": "boolean"}
+      }
+    }
+  }
+}
