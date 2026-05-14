@@ -13,10 +13,61 @@ import time
 from pathlib import Path
 
 import numpy as np
+import tensorflow as tf
 from tensorflow import keras
 
 from training.dataset import load_split
 from training.model import build_model
+
+
+def configure_gpu_memory() -> None:
+    """Aktiviert "Memory Growth" auf allen erkannten GPUs.
+
+    Standardmaessig versucht TF, fast den gesamten GPU-Speicher beim ersten Tensor
+    zu allokieren. Bei grossen Datensaetzen scheitert das. Mit Memory-Growth wird
+    Speicher inkrementell genommen.
+    """
+    gpus = tf.config.list_physical_devices("GPU")
+    if not gpus:
+        print("Keine GPU erkannt - Training laeuft auf CPU.")
+        return
+    for gpu in gpus:
+        try:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(f"  Memory-Growth-Setup fuer {gpu.name} gescheitert: {e}")
+    print(f"GPU-Training auf {len(gpus)} GPU(s) mit Memory-Growth aktiviert.")
+
+
+def _make_dataset(
+    X: np.ndarray,
+    masks: np.ndarray,
+    actions: np.ndarray,
+    batch_size: int,
+    shuffle: bool,
+    seed: int,
+) -> tf.data.Dataset:
+    """Baut ein tf.data.Dataset, das den GPU-Speicher nicht ueberlaeuft.
+
+    KRITISCH: from_tensor_slices muss innerhalb von tf.device('/CPU:0') aufgerufen
+    werden. Sonst versucht TF, die kompletten Arrays als Konstanten auf die GPU
+    zu schieben (mehrere GB), was bei groesseren Datasets immer scheitert
+    ("Dst tensor is not initialized").
+
+    Mit dem CPU-Scope bleiben die Daten im CPU-RAM; nur die Batches werden zur
+    GPU prefetched.
+    """
+    with tf.device("/CPU:0"):
+        ds = tf.data.Dataset.from_tensor_slices(
+            ({"state": X, "mask": masks}, actions)
+        )
+        if shuffle:
+            # Shuffle-Buffer 100k: gute Mischung ohne RAM-Sprengung
+            ds = ds.shuffle(
+                buffer_size=100_000, seed=seed, reshuffle_each_iteration=True
+            )
+        ds = ds.batch(batch_size)
+    return ds.prefetch(tf.data.AUTOTUNE)
 
 
 def train(
@@ -29,6 +80,7 @@ def train(
     patience: int = 5,
     seed: int = 42,
 ) -> None:
+    configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     split = load_split(data_dir, val_fraction=val_fraction, seed=seed)
@@ -69,16 +121,19 @@ def train(
     ]
 
     print(f"\nTraining startet: epochs={epochs}, batch_size={batch_size}")
+    train_ds = _make_dataset(
+        split.train.X, split.train.masks, split.train.actions,
+        batch_size=batch_size, shuffle=True, seed=seed,
+    )
+    val_ds = _make_dataset(
+        split.val.X, split.val.masks, split.val.actions,
+        batch_size=batch_size, shuffle=False, seed=seed,
+    )
     start = time.perf_counter()
     history = model.fit(
-        x={"state": split.train.X, "mask": split.train.masks},
-        y=split.train.actions,
-        validation_data=(
-            {"state": split.val.X, "mask": split.val.masks},
-            split.val.actions,
-        ),
+        train_ds,
+        validation_data=val_ds,
         epochs=epochs,
-        batch_size=batch_size,
         callbacks=callbacks,
         verbose=1,
     )
