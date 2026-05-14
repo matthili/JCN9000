@@ -1,0 +1,57 @@
+name: TF.js zum Release-Asset hinzufuegen
+
+# Triggert automatisch nach jedem veroeffentlichten Release. Konvertiert das
+# Keras-Modell aus dem hochgeladenen ZIP nach TF.js (laeuft auf Linux-Runner
+# zuverlaessig, anders als auf Windows/WSL2 mit aktuellem Python) und ersetzt
+# das ZIP-Asset durch eine erweiterte Version inkl. tfjs/-Verzeichnis.
+#
+# Manueller Trigger ueber Actions -> "TF.js zum Release-Asset hinzufuegen" ->
+# "Run workflow" mit einem Tag, falls der Workflow fuer einen alten Release
+# nachgezogen werden soll.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release-Tag (z.B. v0.2.0)"
+        required: true
+
+jobs:
+  add-tfjs:
+    name: TF.js konvertieren und Asset ersetzen
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # zum gh release upload --clobber
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # tensorflowjs-Toolchain laeuft hier sauber
+          cache: pip
+
+      - name: TF.js-Toolchain installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install "tensorflow==2.18.*" tensorflowjs
+
+      - name: Tag-Name bestimmen
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: TF.js zum Release hinzufuegen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -m scripts.add_tfjs_to_release --tag "${{ steps.tag.outputs.tag }}"
