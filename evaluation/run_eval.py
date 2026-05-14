@@ -7,9 +7,13 @@ Beispiele:
     # 200 Partien Heuristic vs Heuristic (Sitz-Symmetrie-Check)
     python -m evaluation.run_eval --a heuristic --b heuristic --games 200
 
-    # NN gegen Heuristic
+    # NN gegen Heuristic (Modell aus --model fuer Team A)
     python -m evaluation.run_eval --a nn --b heuristic --games 50 \
-        --model models/v2/best.keras
+        --model models/v3/best.keras
+
+    # Zwei NNs gegeneinander (alt vs neu) -- benoetigt --model-a und --model-b
+    python -m evaluation.run_eval --a nn --b nn --games 100 \
+        --model-a models/v1/best.keras --model-b models/v3/best.keras
 
 Optional --save-elo PATH speichert das Elo-State, sodass spaetere
 Tournaments die Ratings akkumulieren koennen.
@@ -79,17 +83,29 @@ def main():
     parser.add_argument("--target", type=int, default=1000, help="Punkteziel pro Partie")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--model", type=Path, default=None,
-                        help="NN-Modell-Pfad (nur bei --a nn oder --b nn)")
+                        help="Gemeinsamer NN-Modell-Pfad (wenn nur ein NN benoetigt wird "
+                             "oder beide NN-Teams dasselbe Modell verwenden)")
+    parser.add_argument("--model-a", type=Path, default=None,
+                        help="NN-Modell fuer Team A (ueberschreibt --model)")
+    parser.add_argument("--model-b", type=Path, default=None,
+                        help="NN-Modell fuer Team B (ueberschreibt --model)")
     parser.add_argument("--save-elo", type=Path, default=None)
     parser.add_argument("--load-elo", type=Path, default=None)
     parser.add_argument("--no-swap-seats", action="store_true",
                         help="Sitzplatz-Tausch in der zweiten Haelfte deaktivieren")
     args = parser.parse_args()
 
-    factory_a = _make_factory(args.a, args.model)
-    factory_b = _make_factory(args.b, args.model)
-    label_a = args.a.capitalize() + "_A"
-    label_b = args.b.capitalize() + "_B"
+    model_a = args.model_a if args.model_a is not None else args.model
+    model_b = args.model_b if args.model_b is not None else args.model
+    factory_a = _make_factory(args.a, model_a)
+    factory_b = _make_factory(args.b, model_b)
+    # Bei zwei NN-Modellen das Modell-Name im Label kenntlich machen
+    def _label(kind: str, model_path: Path | None, suffix: str) -> str:
+        if kind == "nn" and model_path is not None:
+            return f"NN({model_path.parent.name})_{suffix}"
+        return kind.capitalize() + f"_{suffix}"
+    label_a = _label(args.a, model_a, "A")
+    label_b = _label(args.b, model_b, "B")
 
     elo = EloRating.load_json(args.load_elo) if args.load_elo else EloRating()
 
