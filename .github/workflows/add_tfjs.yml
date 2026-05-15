@@ -39,7 +39,14 @@ jobs:
       - name: TF.js-Toolchain installieren
         run: |
           python -m pip install --upgrade pip
-          pip install "tensorflow==2.18.*" tensorflowjs
+          # tensorflowjs >=4.22 ist mit NumPy 2.x kompatibel (frueher: np.object-Bug).
+          # Wir installieren erst tensorflowjs (das zieht die passende TF-Version
+          # als Dependency mit) -- so vermeiden wir, dass pip ein altes tensorflowjs
+          # waehlt, das mit modernem NumPy bricht.
+          pip install "tensorflowjs>=4.22"
+          # Engine + Modell-Code installieren, damit MaskBias-Custom-Layer beim
+          # Modell-Laden korrekt aufgeloest wird (siehe add_tfjs_to_release.py).
+          pip install -e .
 
       - name: Tag-Name bestimmen
         id: tag

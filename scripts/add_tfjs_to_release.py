@@ -48,8 +48,12 @@ def main():
 
     if shutil.which("gh") is None:
         sys.exit("FEHLER: gh-CLI nicht gefunden.")
-    if shutil.which("tensorflowjs_converter") is None:
-        sys.exit("FEHLER: tensorflowjs_converter nicht gefunden. Bitte 'pip install tensorflowjs'.")
+    # tensorflowjs als Python-Modul pruefen (nicht als CLI-Tool). Wir benutzen
+    # die Python-API, damit der MaskBias-Custom-Layer korrekt registriert wird.
+    try:
+        import tensorflowjs  # noqa: F401
+    except ImportError:
+        sys.exit("FEHLER: tensorflowjs nicht installiert. Bitte 'pip install \"tensorflowjs>=4.22\"'.")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
@@ -97,15 +101,22 @@ def main():
         keras_path = keras_files[0]
         print(f"  Keras-Modell: {keras_path.relative_to(release_dir)}")
 
-        # 5. Konvertieren
-        print("[4/6] Konvertiere nach TF.js...")
+        # 5. Konvertieren -- Python-API statt CLI-Subprocess.
+        #
+        # Hintergrund: unser Modell nutzt eine selbstgebaute Schicht (MaskBias),
+        # registriert per @keras.saving.register_keras_serializable in
+        # training/model.py. Die Registrierung wirkt nur, wenn das Modul
+        # importiert wird. Wenn wir tensorflowjs_converter als externes CLI
+        # aufrufen, kennt es unsere Custom-Layer nicht und das Modell-Laden
+        # scheitert. Mit der Python-API geschieht das alles im gleichen
+        # Prozess, in dem wir training.model importiert haben.
+        print("[4/6] Konvertiere nach TF.js (Python-API mit Custom-Layer)...")
         tfjs_dir.mkdir(parents=True, exist_ok=True)
-        _run([
-            "tensorflowjs_converter",
-            "--input_format=keras",
-            str(keras_path),
-            str(tfjs_dir),
-        ])
+        import tensorflowjs as tfjs
+        from tensorflow import keras
+        from training.model import MaskBias  # noqa: F401 -- triggert Registrierung
+        model = keras.models.load_model(str(keras_path))
+        tfjs.converters.save_keras_model(model, str(tfjs_dir))
         tfjs_files = list(tfjs_dir.iterdir())
         print(f"  TF.js-Dateien: {[f.name for f in tfjs_files]}")
 
