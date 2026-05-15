@@ -39,6 +39,9 @@ jobs:
       - name: TF.js-Toolchain installieren
         run: |
           python -m pip install --upgrade pip
+          # setuptools explizit (in Python 3.12 nicht mehr automatisch dabei) --
+          # tensorflow_hub importiert pkg_resources daraus.
+          pip install --upgrade setuptools
           # tensorflowjs >=4.22 ist mit NumPy 2.x kompatibel (frueher: np.object-Bug).
           # Wir installieren erst tensorflowjs (das zieht die passende TF-Version
           # als Dependency mit) -- so vermeiden wir, dass pip ein altes tensorflowjs
