@@ -57,6 +57,10 @@ for _stub_name in (
     "tensorflow_decision_forests",
     "yggdrasil_decision_forests",
     "ydf",
+    # tensorflow_hub ziehen tensorflowjs blind mit, braucht aber pkg_resources
+    # (in Python 3.12 nicht mehr automatisch da). Wir brauchen Hub-Modelle nicht
+    # fuer MLP-Konvertierung -- also stubben.
+    "tensorflow_hub",
 ):
     if _stub_name not in sys.modules:
         sys.modules[_stub_name] = _SilentStubModule(_stub_name)
