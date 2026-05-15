@@ -29,12 +29,12 @@ from jass_engine.weis import (
 )
 
 
-SPEC_VERSION = "1.0.0"
+SPEC_VERSION = "1.1.0"  # +Gumpf-Variante (additiv, kein Bruch)
 
 GAME_NAME = "Vorarlberger Kreuz-Jass"
 GAME_DESCRIPTION = (
     "Vorarlberger Variante des Schweizer Jass mit 4 Spielern, einfachem deutschen "
-    "Blatt (36 Karten), Trumpf-/Bock-/Geiss-/Slalom-Varianten, Schieben, Weisen, "
+    "Blatt (36 Karten), Trumpf-/Gumpf-/Bock-/Geiss-/Slalom-Varianten, Schieben, Weisen, "
     "Stöcken und Matsch-Bonus."
 )
 
@@ -78,6 +78,19 @@ def _trumpf_points() -> dict[str, dict[str, int]]:
         "non_trump": {r.name: POINT_VALUES_NORMAL[r] for r in ALL_RANKS},
         "trump": {r.name: POINT_VALUES_TRUMP[r] for r in ALL_RANKS},
     }
+
+
+def _gumpf_points() -> dict[str, dict[str, int]]:
+    """Gumpf-Wertpunkte: identisch mit Trumpf-Variante. Nur Stärke ist invertiert."""
+    return {
+        "non_trump": {r.name: POINT_VALUES_NORMAL[r] for r in ALL_RANKS},
+        "trump": {r.name: POINT_VALUES_TRUMP[r] for r in ALL_RANKS},
+    }
+
+
+def _non_trump_rank_order_desc_inverted() -> list[str]:
+    """Gumpf-Nicht-Trumpf: 6 stärkste, Ass schwächste (Geiss-mäßig)."""
+    return [r.name for r in sorted(ALL_RANKS, key=lambda r: int(r))]
 
 
 def _oben_unten_points() -> dict[str, int]:
@@ -176,6 +189,58 @@ def build_spec() -> dict:
                             "es besteht keine Pflicht zu trumpfen."
                         ),
                     },
+                },
+                "stoecke": {
+                    "active": True,
+                    "cards": ["trump_OBER", "trump_KOENIG"],
+                    "points": STOECKE_POINTS,
+                    "announce_timing": "after_second_stock_card_played",
+                    "competes_with_other_weisen": False,
+                },
+            },
+
+            "gumpf": {
+                "id": "gumpf",
+                "german": "Gumpf",
+                "has_trump_suit": True,
+                "trump_suit_options": [s.name for s in ALL_SUITS],
+                "card_points": _gumpf_points(),
+                "rank_order_desc": {
+                    # Nicht-Trumpf-Reihenfolge ist invertiert (6 stärkste, Ass schwächste)
+                    "non_trump": _non_trump_rank_order_desc_inverted(),
+                    "trump": _trump_rank_order_desc(),
+                },
+                "rules": {
+                    "follow_lead_suit_if_possible": True,
+                    "buur_exception": {
+                        "active": True,
+                        "description": (
+                            "Trumpf-Unter (Buur) darf auch im Gumpf jederzeit gespielt "
+                            "werden — die Trumpf-Farbe verhält sich genauso wie bei der "
+                            "normalen Trumpf-Variante."
+                        ),
+                    },
+                    "no_undertrumping": {
+                        "active": True,
+                        "description": (
+                            "In der Trumpf-Farbe gilt im Gumpf das gleiche Untertrumpf-"
+                            "Verbot wie in der normalen Trumpf-Variante."
+                        ),
+                    },
+                    "stichzwang": {
+                        "active": False,
+                        "description": (
+                            "Wer die Lead-Farbe nicht bedienen kann, darf frei abwerfen — "
+                            "es besteht keine Pflicht zu trumpfen."
+                        ),
+                    },
+                    "note": (
+                        "Gumpf = 'Geiss + Trumpf': In der Trumpf-Farbe gelten Trumpf-Werte "
+                        "(Buur=20, Nell=14) und Trumpf-Reihenfolge. In allen anderen Farben "
+                        "ist die Stärke invertiert: die 6 in der Lead-Farbe sticht alles "
+                        "Nicht-Trumpf. Wertpunkte in Nicht-Trumpf bleiben wie bei der "
+                        "Trumpf-Variante (8er=0, kein Geiss-8er-Bonus)."
+                    ),
                 },
                 "stoecke": {
                     "active": True,

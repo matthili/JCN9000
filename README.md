@@ -2,7 +2,7 @@
 
 **Vorarlberger Kreuz-Jass** als regelgetreue Python-Engine plus neuronales Netz als KI-Gegner. Erzeugt versionierte Artefakte (Modell + Regel-Spezifikation), die in einer separaten Web-Anwendung als Multiplayer-Plattform eingebunden werden können.
 
-[![Tests](https://img.shields.io/badge/tests-103%20passing-brightgreen)](#verifikation)
+[![Tests](https://img.shields.io/badge/tests-126%20passing-brightgreen)](#verifikation)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](#voraussetzungen)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -22,13 +22,14 @@
 
 | Komponente | Bedeutung |
 |---|---|
-| **Spielengine** ([`jass_engine/`](jass_engine/)) | 36 Karten, alle Varianten (Trumpf / Bock / Geiss / Slalom), Weisen, Stöcke, Matsch, Schieben — 100 % regelgetreu |
+| **Spielengine** ([`jass_engine/`](jass_engine/)) | 36 Karten, alle Varianten (Trumpf / **Gumpf** / Bock / Geiss / Slalom), Weisen, Stöcke, Matsch, Schieben — 100 % regelgetreu |
 | **Heuristik-Bot** ([`players/heuristic_player.py`](players/heuristic_player.py)) | Stechen, Schmieren, Sparen, Variant-Scoring; ~99 % Sieg gegen Random |
-| **Trainings-Pipeline** ([`training/`](training/)) | State-Encoder, Datengenerator (350+ Partien/s mit 20 Workern), Keras-Modell, Trainings-Loop |
+| **Trainings-Pipeline** ([`training/`](training/)) | State-Encoder v3.0.0 (421 Dims), Datengenerator (~500 Partien/s mit 20 Workern), Keras-Modell (768/768/384), Shard-Streaming-Training, RL/Self-Play-Stack ([`training/rl/`](training/rl/)) |
 | **NN-Player** ([`players/nn_player.py`](players/nn_player.py)) | Lädt ein trainiertes Modell und spielt damit |
+| **Eval** ([`evaluation/`](evaluation/)) | Sequenziell mit Elo, oder parallel über N CPU-Worker (`--workers 16` → 2000 Partien in ~19 min) |
 | **Visualisierung** ([`visualization/`](visualization/)) | Rich-basierte Terminal-Demo und Streamlit-App zur interaktiven Regel-Verifikation |
-| **Regel-Spezifikation** ([`spec/`](spec/)) | Versionierte JSON-Spec + Encoder-Doku + Test-Fixtures als Schnittstelle für die Web-Anwendung |
-| **Test-Suite** ([`tests/`](tests/)) | 103 Tests: Regeln, Weisen, Heuristik, Encoder, Spec-Konsistenz |
+| **Regel-Spezifikation** ([`spec/`](spec/)) | Versionierte JSON-Spec (1.1.0) + Encoder-Doku (3.0.0) + Test-Fixtures als Schnittstelle für die Web-Anwendung |
+| **Test-Suite** ([`tests/`](tests/)) | 126 Tests: Regeln (inkl. Gumpf), Weisen, Heuristik, Encoder, Spec-Konsistenz |
 
 ## Voraussetzungen
 

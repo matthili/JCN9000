@@ -17,6 +17,10 @@ Output (im output-Verzeichnis):
     trumpf_schelle/
     trumpf_herz/
     trumpf_laub/
+    gumpf_eichel/
+    gumpf_schelle/
+    gumpf_herz/
+    gumpf_laub/
     oben/
     unten/
     slalom_oben/
@@ -29,11 +33,18 @@ gezielt eine Auswahl treffen.
 from __future__ import annotations
 
 import argparse
+import gc
 import multiprocessing as mp
 import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
+try:
+    import resource  # Unix-only; auf Windows existiert das Modul nicht
+    _HAS_RESOURCE = True
+except ImportError:
+    _HAS_RESOURCE = False
 
 import numpy as np
 from tqdm import tqdm
@@ -47,6 +58,29 @@ from training.recording_player import RecordingPlayer
 
 
 REWARD_SCALE = 200.0
+
+# spawn statt fork. Defensive Wahl: bei langen Datengenerierungen mit
+# mehreren Pool-Cycles ist spawn robuster, weil jeder Worker einen
+# frischen Python-Interpreter startet (kein COW-Memory-Sharing mit dem
+# Hauptprozess). Kosten: ~1s zusaetzliche Startzeit pro Worker-Spawn fuer
+# Modul-Imports -- bei 240 Spawns ueber alle Varianten ~4 min Overhead.
+#
+# Hinweis: ein zuvor beobachtetes OOM-Problem (Hauptprozess wuchs auf
+# 60+ GB RSS) war NICHT durch fork verursacht, sondern durch
+# WSL2-Kernel-Buchhaltung aus einem frueheren abgebrochenen Lauf.
+# Loesung dort: `wsl --shutdown` vor neuem Lauf. Trotzdem behalten wir
+# spawn als robusten Default fuer alle zukuenftigen Long-Running-Jobs.
+_MP_CONTEXT = mp.get_context("spawn")
+
+
+def _log_main_rss(label: str) -> None:
+    """Loggt den aktuellen RSS-Wert des Hauptprozesses. Hilft Memory-Drift
+    sofort sichtbar zu machen. Auf Windows ein No-op."""
+    if not _HAS_RESOURCE:
+        return
+    rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # Linux meldet ru_maxrss in KB; macOS in Bytes. Wir nehmen die Linux-Konvention an.
+    print(f"  [memdiag] main-RSS nach {label}: {rss_kb / 1024:.0f} MB (peak)")
 
 
 @dataclass
@@ -64,6 +98,10 @@ ALL_VARIANTS: list[VariantSpec] = [
     VariantSpec("trumpf_schelle", Announcement(variant=Variant.trumpf(Suit.SCHELLE))),
     VariantSpec("trumpf_herz", Announcement(variant=Variant.trumpf(Suit.HERZ))),
     VariantSpec("trumpf_laub", Announcement(variant=Variant.trumpf(Suit.LAUB))),
+    VariantSpec("gumpf_eichel", Announcement(variant=Variant.gumpf(Suit.EICHEL))),
+    VariantSpec("gumpf_schelle", Announcement(variant=Variant.gumpf(Suit.SCHELLE))),
+    VariantSpec("gumpf_herz", Announcement(variant=Variant.gumpf(Suit.HERZ))),
+    VariantSpec("gumpf_laub", Announcement(variant=Variant.gumpf(Suit.LAUB))),
     VariantSpec("oben", Announcement(variant=Variant.oben())),
     VariantSpec("unten", Announcement(variant=Variant.unten())),
     VariantSpec("slalom_oben", Announcement(variant=Variant.oben(), slalom=True)),
@@ -205,7 +243,9 @@ def generate_for_variant(
                 result = _worker(task)
                 pbar.update(result.num_games)
     else:
-        with mp.Pool(processes=workers) as pool:
+        # spawn-Context: frische Python-Interpreter pro Worker, kein
+        # fork()-COW-Drift im Hauptprozess. Siehe Kommentar an _MP_CONTEXT.
+        with _MP_CONTEXT.Pool(processes=workers) as pool:
             with tqdm(total=num_games, desc=desc, leave=False) as pbar:
                 for result in pool.imap_unordered(_worker, tasks, chunksize=1):
                     pbar.update(result.num_games)
@@ -217,13 +257,20 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--runs-per-variant", type=int, default=50_000,
-        help="Anzahl Runden pro Variante (Default: 50k -> 400k gesamt)",
+        help="Anzahl Runden pro Variante (Default: 50k -> 600k gesamt bei 12 Varianten)",
     )
     parser.add_argument(
         "--output", type=str, default="data/balanced",
         help="Output-Verzeichnis (jede Variante in einem Unterordner)",
     )
-    parser.add_argument("--shard-size", type=int, default=2000)
+    parser.add_argument(
+        "--shard-size", type=int, default=500,
+        help=(
+            "Spiele pro Shard. Default 500 -> ~0.3 GB Peak-RAM pro Worker bei "
+            "Encoder v3.0.0 (421 Dims). Hoehere Werte sparen Datei-Anzahl, "
+            "brauchen aber mehr RAM. Bei --workers 20: 500*20*0.3 = 6 GB Peak."
+        ),
+    )
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--target", type=int, default=1000, help="Punkteziel pro Partie")
     parser.add_argument("--seed", type=int, default=42)
@@ -248,6 +295,7 @@ def main():
     )
     start = time.perf_counter()
     total_games = 0
+    _log_main_rss("Init")
     for vs in selected:
         ngames = generate_for_variant(
             output_dir=output_dir,
@@ -259,6 +307,10 @@ def main():
             seed=args.seed + hash(vs.label) % 10000,
         )
         total_games += ngames
+        # Hauptprozess zwischen Varianten aufraeumen. Mit spawn-Context sollte
+        # eigentlich nichts haengenbleiben; das gc.collect ist Defensive.
+        gc.collect()
+        _log_main_rss(f"Variante {vs.label}")
 
     elapsed = time.perf_counter() - start
     print(

@@ -1,7 +1,7 @@
 {
-  "spec_version": "1.0.0",
+  "spec_version": "1.1.0",
   "name": "Vorarlberger Kreuz-Jass",
-  "description": "Vorarlberger Variante des Schweizer Jass mit 4 Spielern, einfachem deutschen Blatt (36 Karten), Trumpf-/Bock-/Geiss-/Slalom-Varianten, Schieben, Weisen, Stöcken und Matsch-Bonus.",
+  "description": "Vorarlberger Variante des Schweizer Jass mit 4 Spielern, einfachem deutschen Blatt (36 Karten), Trumpf-/Gumpf-/Bock-/Geiss-/Slalom-Varianten, Schieben, Weisen, Stöcken und Matsch-Bonus.",
   "sources": [
     "https://jassa.at/regeln/",
     "https://www.mohrenbrauerei.at/biererlebniswelt/community/haeufig-gestellte-fragen-faq/",
@@ -175,6 +175,91 @@
           "active": false,
           "description": "Wer die Lead-Farbe nicht bedienen kann, darf frei abwerfen — es besteht keine Pflicht zu trumpfen."
         }
+      },
+      "stoecke": {
+        "active": true,
+        "cards": [
+          "trump_OBER",
+          "trump_KOENIG"
+        ],
+        "points": 20,
+        "announce_timing": "after_second_stock_card_played",
+        "competes_with_other_weisen": false
+      }
+    },
+    "gumpf": {
+      "id": "gumpf",
+      "german": "Gumpf",
+      "has_trump_suit": true,
+      "trump_suit_options": [
+        "EICHEL",
+        "SCHELLE",
+        "HERZ",
+        "LAUB"
+      ],
+      "card_points": {
+        "non_trump": {
+          "SECHS": 0,
+          "SIEBEN": 0,
+          "ACHT": 0,
+          "NEUN": 0,
+          "ZEHN": 10,
+          "UNTER": 2,
+          "OBER": 3,
+          "KOENIG": 4,
+          "ASS": 11
+        },
+        "trump": {
+          "SECHS": 0,
+          "SIEBEN": 0,
+          "ACHT": 0,
+          "NEUN": 14,
+          "ZEHN": 10,
+          "UNTER": 20,
+          "OBER": 3,
+          "KOENIG": 4,
+          "ASS": 11
+        }
+      },
+      "rank_order_desc": {
+        "non_trump": [
+          "SECHS",
+          "SIEBEN",
+          "ACHT",
+          "NEUN",
+          "ZEHN",
+          "UNTER",
+          "OBER",
+          "KOENIG",
+          "ASS"
+        ],
+        "trump": [
+          "UNTER",
+          "NEUN",
+          "ASS",
+          "KOENIG",
+          "OBER",
+          "ZEHN",
+          "ACHT",
+          "SIEBEN",
+          "SECHS"
+        ]
+      },
+      "rules": {
+        "follow_lead_suit_if_possible": true,
+        "buur_exception": {
+          "active": true,
+          "description": "Trumpf-Unter (Buur) darf auch im Gumpf jederzeit gespielt werden — die Trumpf-Farbe verhält sich genauso wie bei der normalen Trumpf-Variante."
+        },
+        "no_undertrumping": {
+          "active": true,
+          "description": "In der Trumpf-Farbe gilt im Gumpf das gleiche Untertrumpf-Verbot wie in der normalen Trumpf-Variante."
+        },
+        "stichzwang": {
+          "active": false,
+          "description": "Wer die Lead-Farbe nicht bedienen kann, darf frei abwerfen — es besteht keine Pflicht zu trumpfen."
+        },
+        "note": "Gumpf = 'Geiss + Trumpf': In der Trumpf-Farbe gelten Trumpf-Werte (Buur=20, Nell=14) und Trumpf-Reihenfolge. In allen anderen Farben ist die Stärke invertiert: die 6 in der Lead-Farbe sticht alles Nicht-Trumpf. Wertpunkte in Nicht-Trumpf bleiben wie bei der Trumpf-Variante (8er=0, kein Geiss-8er-Bonus)."
       },
       "stoecke": {
         "active": true,

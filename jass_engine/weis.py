@@ -139,8 +139,10 @@ def stoecke_weis(trumpf: Suit) -> Weis:
 
 
 def stoecke_apply(variant: Variant) -> bool:
-    """Stöcke gibt es nur, wenn ein Trumpf existiert (also nicht bei Bock/Geiss/Slalom)."""
-    return variant.mode == PlayMode.TRUMPF
+    """Stöcke gibt es nur, wenn ein Trumpf existiert (also nicht bei Bock/Geiss/Slalom).
+    Sowohl TRUMPF als auch GUMPF haben eine Trumpf-Farbe → Stöcke gelten in beiden.
+    """
+    return variant.has_trump
 
 
 def _weis_sort_key(weis: Weis) -> tuple[int, int]:

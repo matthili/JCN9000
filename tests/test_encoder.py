@@ -1,4 +1,4 @@
-"""Tests für den State-Encoder (Version 2.0.0)."""
+"""Tests für den State-Encoder (Version 3.0.0)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from training.encoder import (
 
 
 def test_encoding_version():
-    assert ENCODING_VERSION == "2.0.0"
+    assert ENCODING_VERSION == "3.0.0"
 
 
 def test_card_index_eindeutig():
@@ -44,8 +44,10 @@ def test_card_index_invertierbar():
 
 
 def test_input_dim_konstante():
-    # 9*36 (eigene Hand + 4 played-by-* + 4 current-trick-by-*) + 5*4 + 4 (skalare) = 348
-    assert INPUT_DIM == 348
+    # v3: 11*36 (own_hand + 4 played-by-* + 4 current-trick-by-* + value_per_card + strength_per_card)
+    #     + 4 (lead_suit) + 4 (trump_suit) + 5 (mode) + 4 (my_seat) + 4 (starter) + 4*1 (skalare)
+    #     = 396 + 21 + 4 = 421
+    assert INPUT_DIM == 421
     assert ACTION_DIM == 36
 
 
@@ -155,6 +157,7 @@ def test_encode_current_trick_pro_spieler_und_lead_suit():
 
 
 def test_encode_mode_oben():
+    """v3: mode = [is_trumpf, is_gumpf, is_oben, is_unten, is_slalom_flag]."""
     state = GameState(
         player_idx=0,
         variant=Variant.oben(),
@@ -165,15 +168,17 @@ def test_encode_mode_oben():
     )
     vec = encode_state([], state)
     off, _ = SECTION_OFFSETS["mode"]
-    assert vec[off + 0] == 0.0
-    assert vec[off + 1] == 1.0
-    assert vec[off + 2] == 0.0
-    assert vec[off + 3] == 0.0
+    assert vec[off + 0] == 0.0  # is_trumpf
+    assert vec[off + 1] == 0.0  # is_gumpf
+    assert vec[off + 2] == 1.0  # is_oben
+    assert vec[off + 3] == 0.0  # is_unten
+    assert vec[off + 4] == 0.0  # is_slalom
     off_tr, end_tr = SECTION_OFFSETS["trump_suit"]
     assert vec[off_tr:end_tr].sum() == 0.0
 
 
 def test_encode_mode_slalom():
+    """Slalom: is_unten=1 in Stich 1, plus is_slalom_flag=1."""
     state = GameState(
         player_idx=0,
         variant=Variant.unten(),
@@ -184,8 +189,75 @@ def test_encode_mode_slalom():
     )
     vec = encode_state([], state)
     off, _ = SECTION_OFFSETS["mode"]
-    assert vec[off + 2] == 1.0
-    assert vec[off + 3] == 1.0
+    assert vec[off + 3] == 1.0  # is_unten
+    assert vec[off + 4] == 1.0  # is_slalom_flag
+
+
+def test_encode_mode_gumpf():
+    """Gumpf: is_gumpf=1, trump_suit Onehot gesetzt."""
+    state = GameState(
+        player_idx=0,
+        variant=Variant.gumpf(Suit.EICHEL),
+        announcement=Announcement(variant=Variant.gumpf(Suit.EICHEL)),
+        current_trick_cards=[],
+        current_trick_starter=0,
+        teams=[0, 1, 0, 1],
+    )
+    vec = encode_state([], state)
+    off, _ = SECTION_OFFSETS["mode"]
+    assert vec[off + 0] == 0.0  # is_trumpf
+    assert vec[off + 1] == 1.0  # is_gumpf
+    assert vec[off + 2] == 0.0
+    assert vec[off + 3] == 0.0
+    assert vec[off + 4] == 0.0
+    off_tr, _ = SECTION_OFFSETS["trump_suit"]
+    assert vec[off_tr + int(Suit.EICHEL)] == 1.0
+
+
+def test_encode_value_per_card_trumpf():
+    """value_per_card[Buur in Trumpf-Farbe] muss 20/20=1.0 sein."""
+    from training.encoder import MAX_CARD_VALUE
+    state = GameState(
+        player_idx=0,
+        variant=Variant.trumpf(Suit.EICHEL),
+        announcement=Announcement(variant=Variant.trumpf(Suit.EICHEL)),
+        current_trick_cards=[],
+        current_trick_starter=0,
+        teams=[0, 1, 0, 1],
+    )
+    vec = encode_state([], state)
+    off, _ = SECTION_OFFSETS["value_per_card"]
+    buur = Card(Suit.EICHEL, Rank.UNTER)
+    nell = Card(Suit.EICHEL, Rank.NEUN)
+    assert abs(vec[off + card_index(buur)] - 20.0 / MAX_CARD_VALUE) < 1e-6
+    assert abs(vec[off + card_index(nell)] - 14.0 / MAX_CARD_VALUE) < 1e-6
+    # Nicht-Trumpf-Unter: 2 Punkte
+    nontrump_u = Card(Suit.HERZ, Rank.UNTER)
+    assert abs(vec[off + card_index(nontrump_u)] - 2.0 / MAX_CARD_VALUE) < 1e-6
+
+
+def test_encode_strength_per_card_gumpf_inversion():
+    """Gumpf: Nicht-Trumpf-6 staerker als Nicht-Trumpf-Ass."""
+    from training.encoder import MAX_CARD_STRENGTH
+    state = GameState(
+        player_idx=0,
+        variant=Variant.gumpf(Suit.EICHEL),
+        announcement=Announcement(variant=Variant.gumpf(Suit.EICHEL)),
+        current_trick_cards=[],
+        current_trick_starter=0,
+        teams=[0, 1, 0, 1],
+    )
+    vec = encode_state([], state)
+    off, _ = SECTION_OFFSETS["strength_per_card"]
+    herz_6 = Card(Suit.HERZ, Rank.SECHS)
+    herz_ass = Card(Suit.HERZ, Rank.ASS)
+    # In Gumpf-Nicht-Trumpf: 6 = 9, Ass = 1
+    assert vec[off + card_index(herz_6)] > vec[off + card_index(herz_ass)]
+    assert abs(vec[off + card_index(herz_6)] - 9.0 / MAX_CARD_STRENGTH) < 1e-6
+    assert abs(vec[off + card_index(herz_ass)] - 1.0 / MAX_CARD_STRENGTH) < 1e-6
+    # Trumpf-Buur = 18 (Maximum)
+    buur = Card(Suit.EICHEL, Rank.UNTER)
+    assert abs(vec[off + card_index(buur)] - 18.0 / MAX_CARD_STRENGTH) < 1e-6
 
 
 def test_encode_my_seat_und_starter_relativ():

@@ -1,8 +1,14 @@
-"""Trainings-Loop: lädt Shards, trainiert das Mask-Aware MLP, speichert Checkpoints.
+"""Trainings-Loop: streamt Shards via tf.data, trainiert das Mask-Aware MLP, speichert Checkpoints.
+
+Streaming-Architektur (seit v0.5.0):
+  Statt alle Shards in den RAM zu laden (Peak ~80 GB bei 12 Varianten x 50k Runden),
+  laeuft die Pipeline ueber `tf.data.Dataset.interleave`: pro Trainings-Schritt
+  werden nur ~4 Shards parallel offen gehalten (~1-5 GB Peak). Damit ist auch
+  ein voller v3-Datensatz mit 21 M Samples in 64 GB WSL2 trainierbar.
 
 Aufruf:
-    python -m training.train --data data/heuristic_50k --output models/v1
-    python -m training.train --data data/heuristic_50k --epochs 30 --batch-size 1024
+    python -m training.train --data data/balanced_v3 --output models/v5
+    python -m training.train --data data/balanced_v3 --epochs 40 --batch-size 1024
 """
 
 from __future__ import annotations
@@ -16,7 +22,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
-from training.dataset import load_split
+from training.dataset import split_shards, total_sample_count
+from training.encoder import ACTION_DIM, INPUT_DIM
 from training.model import build_model
 
 
@@ -39,38 +46,97 @@ def configure_gpu_memory() -> None:
     print(f"GPU-Training auf {len(gpus)} GPU(s) mit Memory-Growth aktiviert.")
 
 
-def _make_dataset(
-    X: np.ndarray,
-    masks: np.ndarray,
-    actions: np.ndarray,
-    rewards: np.ndarray,
+def _load_shard_arrays(path_bytes) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Pure-NumPy-Loader, wird via tf.py_function pro Shard aufgerufen.
+
+    Akzeptiert sowohl Python-str als auch ein 0-dim tf-bytes-Tensor (so kommt
+    es aus tf.py_function rein).
+    """
+    if hasattr(path_bytes, "numpy"):
+        path_bytes = path_bytes.numpy()
+    if isinstance(path_bytes, bytes):
+        path_str = path_bytes.decode("utf-8")
+    else:
+        path_str = str(path_bytes)
+    with np.load(path_str) as d:
+        X = np.asarray(d["X"], dtype=np.float32)
+        # masks im Shard sind uint8 -> wir casten zu float32, weil das Modell
+        # mit float32-Maske rechnet (mask_bias-Layer).
+        masks = np.asarray(d["masks"], dtype=np.float32)
+        actions = np.asarray(d["actions"], dtype=np.int32)
+        if "rewards" in d.files:
+            rewards = np.asarray(d["rewards"], dtype=np.float32)
+        else:
+            rewards = np.zeros(len(actions), dtype=np.float32)
+    return X, masks, actions, rewards
+
+
+def _shard_to_sample_dataset(path_tensor: tf.Tensor) -> tf.data.Dataset:
+    """tf.data-Wrapper: laedt einen Shard und entpackt ihn in einen Sample-Stream."""
+    X, masks, actions, rewards = tf.py_function(
+        _load_shard_arrays,
+        [path_tensor],
+        [tf.float32, tf.float32, tf.int32, tf.float32],
+    )
+    # py_function liefert Shape (None, ...) zurueck -- wir muessen die zweite
+    # Dimension explizit setzen, sonst weiss tf.data nicht, was kommt.
+    X.set_shape([None, INPUT_DIM])
+    masks.set_shape([None, ACTION_DIM])
+    actions.set_shape([None])
+    rewards.set_shape([None])
+    return tf.data.Dataset.from_tensor_slices(
+        (
+            {"state": X, "mask": masks},
+            {"policy": actions, "value": rewards},
+        )
+    )
+
+
+def _make_streaming_dataset(
+    shard_paths: list,
     batch_size: int,
     shuffle: bool,
     seed: int,
+    shuffle_buffer: int = 50_000,
+    interleave_cycle: int = 4,
 ) -> tf.data.Dataset:
-    """Baut ein tf.data.Dataset mit Policy- und Value-Targets.
+    """Baut einen tf.data-Stream ueber Shard-Pfade.
 
-    Liefert pro Sample:
-        inputs = {"state": x, "mask": m}
-        targets = {"policy": action, "value": reward}
+    Architektur:
+      Shard-Pfade -> (optional Shuffle) -> interleave(load_shard, cycle=4)
+        -> unbatch zu Samples -> Sample-Shuffle-Buffer -> batch -> prefetch.
 
-    KRITISCH: from_tensor_slices muss innerhalb von tf.device('/CPU:0') aufgerufen
-    werden. Sonst versucht TF, die kompletten Arrays als Konstanten auf die GPU
-    zu schieben (mehrere GB), was bei groesseren Datasets immer scheitert
-    ("Dst tensor is not initialized").
+    `interleave_cycle=4` haelt vier Shards gleichzeitig offen (RAM-Peak je nach
+    Shard-Groesse ~1-5 GB), und der Sample-Shuffle-Buffer mischt deren Inhalt
+    durcheinander. Das reicht in der Praxis: jedes Shard enthaelt bereits eine
+    Mischung aus mehreren Partien.
+
+    Kein `with tf.device("/CPU:0")` noetig: bei Streaming gibt es keine
+    Konstanten-Promotion-Falle (kein from_tensor_slices auf das volle Array).
     """
-    with tf.device("/CPU:0"):
-        ds = tf.data.Dataset.from_tensor_slices(
-            (
-                {"state": X, "mask": masks},
-                {"policy": actions, "value": rewards},
-            )
+    paths = [str(p) for p in shard_paths]
+    path_ds = tf.data.Dataset.from_tensor_slices(paths)
+    if shuffle:
+        # Pfad-Reihenfolge je Epoche neu mischen -> kein Bias durch Datei-Index
+        path_ds = path_ds.shuffle(
+            buffer_size=len(paths), seed=seed, reshuffle_each_iteration=True
         )
-        if shuffle:
-            ds = ds.shuffle(
-                buffer_size=100_000, seed=seed, reshuffle_each_iteration=True
-            )
-        ds = ds.batch(batch_size)
+
+    ds = path_ds.interleave(
+        _shard_to_sample_dataset,
+        cycle_length=interleave_cycle,
+        num_parallel_calls=tf.data.AUTOTUNE,
+        deterministic=not shuffle,
+    )
+
+    if shuffle:
+        ds = ds.shuffle(
+            buffer_size=shuffle_buffer,
+            seed=seed,
+            reshuffle_each_iteration=True,
+        )
+
+    ds = ds.batch(batch_size, drop_remainder=False)
     return ds.prefetch(tf.data.AUTOTUNE)
 
 
@@ -89,17 +155,28 @@ def train(
     configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    split = load_split(data_dir, val_fraction=val_fraction, seed=seed)
+    shard_split = split_shards(data_dir, val_fraction=val_fraction, seed=seed)
+    # Sample-Count nur lesen, um den Fortschritt anzuzeigen + steps_per_epoch
+    # exakt zu rechnen. Schnell (nur Metadaten-Header pro Shard).
+    print("Zaehle Samples pro Shard (Metadata-Sweep)…")
+    train_samples = total_sample_count(shard_split.train_shards)
+    val_samples = total_sample_count(shard_split.val_shards)
     print(
-        f"\nModell wird aufgebaut (Input {split.train.X.shape[1]}, "
-        f"Aktionen {split.train.masks.shape[1]}, "
+        f"  Train: {train_samples:>12,} Samples in {len(shard_split.train_shards)} Shards"
+    )
+    print(
+        f"  Val:   {val_samples:>12,} Samples in {len(shard_split.val_shards)} Shards"
+    )
+
+    print(
+        f"\nModell wird aufgebaut (Input {INPUT_DIM}, Aktionen {ACTION_DIM}, "
         f"Hidden {hidden_units or 'Default'})…"
     )
     from training.model import DEFAULT_HIDDEN
     used_hidden = tuple(hidden_units) if hidden_units else DEFAULT_HIDDEN
     model = build_model(
-        input_dim=split.train.X.shape[1],
-        action_dim=split.train.masks.shape[1],
+        input_dim=INPUT_DIM,
+        action_dim=ACTION_DIM,
         hidden_units=used_hidden,
         learning_rate=learning_rate,
     )
@@ -132,20 +209,32 @@ def train(
         ),
     ]
 
-    print(f"\nTraining startet: epochs={epochs}, batch_size={batch_size}")
-    train_ds = _make_dataset(
-        split.train.X, split.train.masks, split.train.actions, split.train.rewards,
-        batch_size=batch_size, shuffle=True, seed=seed,
+    print(
+        f"\nTraining startet (Streaming): epochs={epochs}, batch_size={batch_size}"
     )
-    val_ds = _make_dataset(
-        split.val.X, split.val.masks, split.val.actions, split.val.rewards,
-        batch_size=batch_size, shuffle=False, seed=seed,
+    train_ds = _make_streaming_dataset(
+        shard_split.train_shards,
+        batch_size=batch_size,
+        shuffle=True,
+        seed=seed,
     )
+    val_ds = _make_streaming_dataset(
+        shard_split.val_shards,
+        batch_size=batch_size,
+        shuffle=False,
+        seed=seed,
+    )
+    # steps_per_epoch/validation_steps explizit setzen -- bei Streaming-Datasets
+    # weiss Keras sonst nicht, wann eine Epoche zu Ende ist.
+    steps_per_epoch = (train_samples + batch_size - 1) // batch_size
+    validation_steps = (val_samples + batch_size - 1) // batch_size
     start = time.perf_counter()
     history = model.fit(
         train_ds,
         validation_data=val_ds,
         epochs=epochs,
+        steps_per_epoch=steps_per_epoch,
+        validation_steps=validation_steps,
         callbacks=callbacks,
         verbose=verbose,
     )

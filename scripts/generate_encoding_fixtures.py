@@ -25,8 +25,8 @@ from jass_engine.variant import Announcement, Variant
 from training.encoder import encode_state, legal_action_mask
 
 
-SPEC_VERSION = "1.0.0"
-ENCODING_VERSION = "2.0.0"
+SPEC_VERSION = "1.1.0"
+ENCODING_VERSION = "3.0.0"
 
 
 def C(suit: Suit, rank: Rank) -> Card:
@@ -363,6 +363,71 @@ def build_fixtures() -> list[Fixture]:
             own_score=87,
             opp_score=64,
             round_idx=5,
+        ),
+    ))
+
+    # --- Gumpf-Szenarien (NEU in v3.0.0) ---
+    fixtures.append(Fixture(
+        id="fix_g01_gumpf_leerer_stich_anspiel",
+        description=(
+            "Gumpf-Eichel, eigener Spieler am Anspielen. Mode-Bit `is_gumpf` muss "
+            "gesetzt sein; Trump-Suit-Onehot zeigt Eichel."
+        ),
+        hand=[
+            C(Suit.EICHEL, Rank.UNTER),
+            C(Suit.EICHEL, Rank.ASS),
+            C(Suit.HERZ, Rank.SECHS),  # in Gumpf-Nicht-Trumpf staerkste!
+            C(Suit.LAUB, Rank.ASS),
+        ],
+        state=_make_state(
+            player_idx=0,
+            variant=Variant.gumpf(Suit.EICHEL),
+        ),
+    ))
+
+    fixtures.append(Fixture(
+        id="fix_g02_gumpf_6_sticht_nichttrumpf",
+        description=(
+            "Gumpf-Eichel, Herz-Ass wurde angespielt (Nicht-Trumpf-Lead). In Gumpf "
+            "ist Herz-6 die staerkste Herz-Karte. Eigene Hand hat Herz-6 und Herz-9 "
+            "(beide bedienen) sowie Buur (Buur-Ausnahme)."
+        ),
+        hand=[
+            C(Suit.HERZ, Rank.SECHS),
+            C(Suit.HERZ, Rank.NEUN),
+            C(Suit.EICHEL, Rank.UNTER),  # Buur
+            C(Suit.LAUB, Rank.ASS),
+        ],
+        state=_make_state(
+            player_idx=1,
+            variant=Variant.gumpf(Suit.EICHEL),
+            trick=[C(Suit.HERZ, Rank.ASS)],
+            starter=0,
+            trick_idx=2,
+        ),
+    ))
+
+    fixtures.append(Fixture(
+        id="fix_g03_gumpf_trumpf_normalfall",
+        description=(
+            "Gumpf-Laub, Trumpf-9 wurde angespielt. Eigene Hand hat Buur und einen "
+            "niedrigen Trumpf. In der Trumpf-Farbe gelten Trumpf-Regeln (Untertrumpf-"
+            "Verbot, Buur-Ausnahme); Untertrumpfen verboten -> nur Buur und Nicht-Trumpf."
+        ),
+        hand=[
+            C(Suit.LAUB, Rank.UNTER),     # Buur
+            C(Suit.LAUB, Rank.SIEBEN),    # niedriger Trumpf
+            C(Suit.EICHEL, Rank.OBER),
+            C(Suit.HERZ, Rank.SECHS),
+        ],
+        state=_make_state(
+            player_idx=2,
+            variant=Variant.gumpf(Suit.LAUB),
+            trick=[C(Suit.LAUB, Rank.NEUN)],
+            starter=1,
+            trick_idx=3,
+            own_score=40,
+            opp_score=50,
         ),
     ))
 

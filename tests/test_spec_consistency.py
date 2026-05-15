@@ -82,6 +82,8 @@ def _card_from_dict(d: dict) -> Card:
 def _variant_from_dict(d: dict) -> Variant:
     if d["mode"] == "TRUMPF":
         return Variant.trumpf(Suit[d["trump_suit"]])
+    if d["mode"] == "GUMPF":
+        return Variant.gumpf(Suit[d["trump_suit"]])
     if d["mode"] == "OBEN":
         return Variant.oben()
     if d["mode"] == "UNTEN":

@@ -22,6 +22,7 @@ def C(suit: Suit, rank: Rank) -> Card:
 
 
 TRUMPF_EICHEL = Variant.trumpf(Suit.EICHEL)
+GUMPF_EICHEL = Variant.gumpf(Suit.EICHEL)
 OBEN = Variant.oben()
 UNTEN = Variant.unten()
 
@@ -356,3 +357,93 @@ def test_unten_farbzwang():
     assert C(Suit.HERZ, Rank.ASS) in legal
     assert C(Suit.HERZ, Rank.SECHS) in legal
     assert C(Suit.LAUB, Rank.SECHS) not in legal
+
+
+# ---------- Gumpf-Modus (Trumpf + Geiss-Inversion in Nicht-Trumpf) ----------
+
+def test_gumpf_wertpunkte_identisch_mit_trumpf():
+    """Gumpf-Wertpunkte = Trumpf-Wertpunkte (8er=0, Buur=20, Nell=14)."""
+    # Trumpf-Farbe
+    assert card_value(C(Suit.EICHEL, Rank.UNTER), GUMPF_EICHEL) == 20
+    assert card_value(C(Suit.EICHEL, Rank.NEUN), GUMPF_EICHEL) == 14
+    assert card_value(C(Suit.EICHEL, Rank.ACHT), GUMPF_EICHEL) == 0
+    # Nicht-Trumpf
+    assert card_value(C(Suit.HERZ, Rank.ASS), GUMPF_EICHEL) == 11
+    assert card_value(C(Suit.HERZ, Rank.ACHT), GUMPF_EICHEL) == 0
+    assert card_value(C(Suit.HERZ, Rank.SECHS), GUMPF_EICHEL) == 0
+
+
+def test_gumpf_summe_kartenpunkte_152():
+    """Wie bei Trumpf: 3*30 + 62 (Trumpf-Farbe mit Buur=20, Nell=14) = 152."""
+    total = 0
+    for s in (Suit.EICHEL, Suit.SCHELLE, Suit.HERZ, Suit.LAUB):
+        for r in (
+            Rank.SECHS, Rank.SIEBEN, Rank.ACHT, Rank.NEUN, Rank.ZEHN,
+            Rank.UNTER, Rank.OBER, Rank.KOENIG, Rank.ASS,
+        ):
+            total += card_value(C(s, r), GUMPF_EICHEL)
+    assert total == 152
+
+
+def test_gumpf_trumpf_buur_schlaegt_alles():
+    """Buur in Trumpf-Farbe bleibt staerkste Karte (1000+8 > 1000+rest)."""
+    buur = C(Suit.EICHEL, Rank.UNTER)
+    eichel_ass = C(Suit.EICHEL, Rank.ASS)
+    herz_ass = C(Suit.HERZ, Rank.ASS)
+    # Lead = Herz
+    assert card_strength(buur, Suit.HERZ, GUMPF_EICHEL) > \
+        card_strength(eichel_ass, Suit.HERZ, GUMPF_EICHEL)
+    assert card_strength(buur, Suit.HERZ, GUMPF_EICHEL) > \
+        card_strength(herz_ass, Suit.HERZ, GUMPF_EICHEL)
+
+
+def test_gumpf_sechs_sticht_ass_in_nicht_trumpf_lead():
+    """In Gumpf-Nicht-Trumpf: Herz-6 sticht Herz-Ass (invertiert wie Geiss)."""
+    h6 = C(Suit.HERZ, Rank.SECHS)
+    ha = C(Suit.HERZ, Rank.ASS)
+    # Lead = Herz, Variante = Gumpf-Eichel -> Herz ist Nicht-Trumpf
+    assert card_strength(h6, Suit.HERZ, GUMPF_EICHEL) > \
+        card_strength(ha, Suit.HERZ, GUMPF_EICHEL)
+
+
+def test_gumpf_nicht_trumpf_andere_farbe_verliert():
+    """Nicht-Trumpf-Karte einer anderen Farbe bekommt -1 (kann nicht stechen)."""
+    laub_6 = C(Suit.LAUB, Rank.SECHS)
+    # Lead Herz, Karte Laub: kann nicht stechen
+    assert card_strength(laub_6, Suit.HERZ, GUMPF_EICHEL) == -1
+
+
+def test_gumpf_legal_moves_buur_ausnahme():
+    """Bei Gumpf gilt die Buur-Ausnahme wie bei Trumpf."""
+    hand = [
+        C(Suit.HERZ, Rank.OBER),
+        C(Suit.HERZ, Rank.SECHS),
+        C(Suit.EICHEL, Rank.UNTER),  # Buur
+        C(Suit.LAUB, Rank.ASS),
+    ]
+    current = [C(Suit.HERZ, Rank.ASS)]
+    legal = legal_moves(hand, current, GUMPF_EICHEL)
+    # Herz-Karten bedienen + Buur-Ausnahme erlauben
+    assert C(Suit.HERZ, Rank.OBER) in legal
+    assert C(Suit.HERZ, Rank.SECHS) in legal
+    assert C(Suit.EICHEL, Rank.UNTER) in legal
+    assert C(Suit.LAUB, Rank.ASS) not in legal
+
+
+def test_gumpf_untertrumpfen_verboten():
+    """In Gumpf-Trumpf-Farbe gilt Untertrumpf-Verbot wie bei Trumpf."""
+    hand = [
+        C(Suit.EICHEL, Rank.SECHS),     # niedriger Trumpf -> Untertrumpf verboten
+        C(Suit.EICHEL, Rank.SIEBEN),
+        C(Suit.LAUB, Rank.ASS),
+        C(Suit.LAUB, Rank.SECHS),
+    ]
+    # Trumpf-Lead Eichel-Neun bereits hoch im Stich
+    current = [C(Suit.HERZ, Rank.ASS), C(Suit.EICHEL, Rank.NEUN)]
+    legal = legal_moves(hand, current, GUMPF_EICHEL)
+    # Niedrige Trümpfe nicht erlaubt
+    assert C(Suit.EICHEL, Rank.SECHS) not in legal
+    assert C(Suit.EICHEL, Rank.SIEBEN) not in legal
+    # Nicht-Trumpf-Karten erlaubt
+    assert C(Suit.LAUB, Rank.ASS) in legal
+    assert C(Suit.LAUB, Rank.SECHS) in legal

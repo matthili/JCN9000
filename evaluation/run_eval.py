@@ -28,7 +28,11 @@ import time
 from pathlib import Path
 
 from evaluation.elo import EloRating
-from evaluation.tournament import format_tournament_summary, two_team_match
+from evaluation.tournament import (
+    format_tournament_summary,
+    two_team_match,
+    two_team_match_parallel,
+)
 from jass_engine.player import Player
 from players.heuristic_player import HeuristicPlayer
 from players.random_player import RandomPlayer
@@ -93,12 +97,20 @@ def main():
     parser.add_argument("--load-elo", type=Path, default=None)
     parser.add_argument("--no-swap-seats", action="store_true",
                         help="Sitzplatz-Tausch in der zweiten Haelfte deaktivieren")
+    parser.add_argument(
+        "--workers", type=int, default=1,
+        help=(
+            "Anzahl paralleler Subprocesses fuer die Spiele-Simulation. "
+            "Default 1 = sequenziell mit Elo-Update. Bei >1 wird jeder Worker "
+            "mit CPU-only-TF gestartet (kein GPU-Konflikt) und Elo deaktiviert. "
+            "Empfehlung fuer NN-Eval auf >=16-Kern-CPU: --workers 8 oder 16."
+        ),
+    )
     args = parser.parse_args()
 
     model_a = args.model_a if args.model_a is not None else args.model
     model_b = args.model_b if args.model_b is not None else args.model
-    factory_a = _make_factory(args.a, model_a)
-    factory_b = _make_factory(args.b, model_b)
+
     # Bei zwei NN-Modellen das Modell-Name im Label kenntlich machen
     def _label(kind: str, model_path: Path | None, suffix: str) -> str:
         if kind == "nn" and model_path is not None:
@@ -107,6 +119,42 @@ def main():
     label_a = _label(args.a, model_a, "A")
     label_b = _label(args.b, model_b, "B")
 
+    if args.workers > 1:
+        # Parallel-Pfad: Elo deaktiviert (siehe two_team_match_parallel-Doku)
+        if args.save_elo or args.load_elo:
+            print(
+                "[warn] --save-elo / --load-elo werden im Parallel-Modus "
+                "(--workers > 1) ignoriert."
+            )
+        print(
+            f"Tournament: {label_a} vs. {label_b}  "
+            f"({args.games} Partien, {args.workers} Worker)"
+        )
+        start = time.perf_counter()
+        result = two_team_match_parallel(
+            label_a=label_a,
+            kind_a=args.a,
+            model_a=model_a,
+            label_b=label_b,
+            kind_b=args.b,
+            model_b=model_b,
+            num_games=args.games,
+            workers=args.workers,
+            target_score=args.target,
+            seed=args.seed,
+            swap_seats_each_half=not args.no_swap_seats,
+        )
+        elapsed = time.perf_counter() - start
+        print(format_tournament_summary(result))
+        print(
+            f"\nDauer: {elapsed:.1f} s  "
+            f"({elapsed / args.games * 1000:.1f} ms/Partie, {args.workers} Worker)"
+        )
+        return
+
+    # Sequenzieller Pfad mit Elo
+    factory_a = _make_factory(args.a, model_a)
+    factory_b = _make_factory(args.b, model_b)
     elo = EloRating.load_json(args.load_elo) if args.load_elo else EloRating()
 
     print(f"Tournament: {label_a} vs. {label_b}  ({args.games} Partien)")

@@ -75,9 +75,10 @@
     },
     "variants": {
       "type": "object",
-      "required": ["trumpf", "oben", "unten", "slalom"],
+      "required": ["trumpf", "gumpf", "oben", "unten", "slalom"],
       "properties": {
         "trumpf": {"$ref": "#/$defs/TrumpfVariant"},
+        "gumpf": {"$ref": "#/$defs/GumpfVariant"},
         "oben": {"$ref": "#/$defs/SimpleVariant"},
         "unten": {"$ref": "#/$defs/SimpleVariant"},
         "slalom": {"$ref": "#/$defs/SlalomVariant"}
@@ -188,6 +189,37 @@
       "required": ["id", "has_trump_suit", "card_points", "rank_order_desc", "rules", "stoecke"],
       "properties": {
         "id": {"const": "trumpf"},
+        "german": {"type": "string"},
+        "has_trump_suit": {"const": true},
+        "trump_suit_options": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "card_points": {
+          "type": "object",
+          "required": ["non_trump", "trump"],
+          "properties": {
+            "non_trump": {"$ref": "#/$defs/RankPointMap"},
+            "trump": {"$ref": "#/$defs/RankPointMap"}
+          }
+        },
+        "rank_order_desc": {
+          "type": "object",
+          "required": ["non_trump", "trump"],
+          "properties": {
+            "non_trump": {"$ref": "#/$defs/RankOrder"},
+            "trump": {"$ref": "#/$defs/RankOrder"}
+          }
+        },
+        "rules": {"$ref": "#/$defs/Rules"},
+        "stoecke": {"$ref": "#/$defs/Stoecke"}
+      }
+    },
+    "GumpfVariant": {
+      "type": "object",
+      "required": ["id", "has_trump_suit", "card_points", "rank_order_desc", "rules", "stoecke"],
+      "properties": {
+        "id": {"const": "gumpf"},
         "german": {"type": "string"},
         "has_trump_suit": {"const": true},
         "trump_suit_options": {

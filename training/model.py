@@ -30,7 +30,10 @@ from tensorflow.keras import layers
 from training.encoder import ACTION_DIM, INPUT_DIM
 
 
-DEFAULT_HIDDEN = (256, 256, 128)
+# v3-Encoder liefert 421 Inputs inklusive value_per_card und strength_per_card.
+# Mit den reicheren Features lohnt sich mehr Kapazitaet -- 768/768/384 entspricht
+# ca. 1.0-1.1 M Parametern (~4 MB Keras, ~10-12 MB TF.js).
+DEFAULT_HIDDEN = (768, 768, 384)
 DEFAULT_VALUE_LOSS_WEIGHT = 0.5  # Value-Loss leichter gewichtet als Policy
 
 

@@ -57,6 +57,29 @@ class TeamStats:
             return 0.0
         return self.wins_by_variant_id.get(variant_id, 0) / games
 
+    def merge(self, other: "TeamStats") -> None:
+        """Aggregiert die Stats von `other` in self (in-place).
+
+        Wird vom parallel-Eval gebraucht: jeder Worker simuliert einen
+        Teilbereich der Spiele, am Ende werden die Stats zusammengefuehrt.
+        """
+        self.games_played += other.games_played
+        self.games_won += other.games_won
+        self.games_lost += other.games_lost
+        self.games_drawn += other.games_drawn
+        self.total_score += other.total_score
+        self.total_rounds += other.total_rounds
+        self.matsch_for += other.matsch_for
+        self.matsch_against += other.matsch_against
+        for variant_id, count in other.games_by_variant_id.items():
+            self.games_by_variant_id[variant_id] = (
+                self.games_by_variant_id.get(variant_id, 0) + count
+            )
+        for variant_id, count in other.wins_by_variant_id.items():
+            self.wins_by_variant_id[variant_id] = (
+                self.wins_by_variant_id.get(variant_id, 0) + count
+            )
+
 
 def _variant_label_for_round(rnd: RoundResult) -> str:
     """Kurz-Label der Variante einer Runde, fuer Statistik-Aggregation."""
@@ -65,6 +88,9 @@ def _variant_label_for_round(rnd: RoundResult) -> str:
     if mode == PlayMode.TRUMPF:
         assert ann.variant.trump_suit is not None
         prefix = f"trumpf_{ann.variant.trump_suit.name.lower()}"
+    elif mode == PlayMode.GUMPF:
+        assert ann.variant.trump_suit is not None
+        prefix = f"gumpf_{ann.variant.trump_suit.name.lower()}"
     elif mode == PlayMode.OBEN:
         prefix = "oben"
     else:

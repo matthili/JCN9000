@@ -56,6 +56,12 @@ TRUMP_RANK_ORDER: dict[Rank, int] = {
     Rank.SECHS: 0,
 }
 
+# Gumpf-Wertpunkte: identisch mit der Trumpf-Variante. Trumpf-Farbe = Trumpf-Werte
+# (Buur=20, Nell=14); Nicht-Trumpf = normale Werte (8er=0, keine Aufwertung).
+# Nur die Stärke-Reihenfolge ist in Nicht-Trumpf-Farben invertiert.
+POINT_VALUES_GUMPF_TRUMP: dict[Rank, int] = POINT_VALUES_TRUMP
+POINT_VALUES_GUMPF_NON_TRUMP: dict[Rank, int] = POINT_VALUES_NORMAL
+
 LAST_TRICK_BONUS = 5
 MATCH_BONUS = 100
 # Trumpf: 3×30 + (11+10+4+3+20+14) = 90 + 62 = 152 Stichpunkte
@@ -74,6 +80,11 @@ def card_value(card: Card, variant: Variant) -> int:
         if card.suit == variant.trump_suit:
             return POINT_VALUES_TRUMP[card.rank]
         return POINT_VALUES_NORMAL[card.rank]
+    if variant.mode == PlayMode.GUMPF:
+        # Wertpunkte identisch mit Trumpf: 8er=0, Buur=20, Nell=14.
+        if card.suit == variant.trump_suit:
+            return POINT_VALUES_GUMPF_TRUMP[card.rank]
+        return POINT_VALUES_GUMPF_NON_TRUMP[card.rank]
     # OBEN oder UNTEN
     return POINT_VALUES_OBEN_UNTEN[card.rank]
 
@@ -102,6 +113,15 @@ def card_strength(card: Card, lead_suit: Suit, variant: Variant) -> int:
         if card.suit == lead_suit:
             return 100 + int(card.rank)
         return -1
+    if variant.mode == PlayMode.GUMPF:
+        # Trumpf-Farbe wie bei normalem Trumpf; Nicht-Trumpf-Farbe in der Lead-
+        # Suit-Position sticht invertiert (6 stärkste, Ass schwächste).
+        assert variant.trump_suit is not None
+        if card.suit == variant.trump_suit:
+            return 1000 + TRUMP_RANK_ORDER[card.rank]
+        if card.suit == lead_suit:
+            return 100 + (8 - int(card.rank))
+        return -1
     if variant.mode == PlayMode.OBEN:
         return _strength_oben(card, lead_suit)
     return _strength_unten(card, lead_suit)
@@ -121,7 +141,7 @@ def legal_moves(
 ) -> list[Card]:
     """Liste der Karten, die der Spieler legal ausspielen darf.
 
-    TRUMPF-Modus:
+    TRUMPF- und GUMPF-Modus (beide mit Trumpf-Farbe):
       - Farbzwang; Buur (Trumpf-Unter) immer spielbar; bei einzigem Trumpf=Buur darf
         beliebige Karte; bei Trumpf-Lead muss Trumpf bedient werden (außer Buur einzig);
         kein Untertrumpfen außer es bleibt keine andere Wahl.
@@ -135,14 +155,14 @@ def legal_moves(
 
     lead_suit = current_trick[0].suit
 
-    if variant.mode != PlayMode.TRUMPF:
+    if variant.mode not in (PlayMode.TRUMPF, PlayMode.GUMPF):
         # Bock/Geiss: einfacher Farbzwang
         same_suit = [c for c in hand if c.suit == lead_suit]
         if same_suit:
             return same_suit
         return list(hand)
 
-    # Trumpf-Modus
+    # Trumpf- oder Gumpf-Modus (beide haben eine trump_suit)
     assert variant.trump_suit is not None
     trumpf = variant.trump_suit
     buur = Card(trumpf, Rank.UNTER)

@@ -1,15 +1,15 @@
 """RL-Hauptschleife: Self-Play -> Trajektorien-Sammlung -> PPO-Update -> Snapshot.
 
 Aufruf:
-    # Erster Lauf -- startet aus dem BC-Warmstart-Modell
-    python -m training.rl.train_rl --warm-start models/v3/best.keras \
+    # Erster Lauf -- startet aus dem BC-Warmstart-Modell (Default: v5)
+    python -m training.rl.train_rl --warm-start models/v5/best.keras \
         --iterations 50 --games-per-iter 16 --target 500 \
-        --output models/rl_v1
+        --output models/rl_v2
 
     # Spaeter weitermachen -- haengt automatisch an den bestehenden Stand an
     # Das output_dir existiert schon mit state.json drin -> Resume passiert automatisch
     python -m training.rl.train_rl --iterations 50 --games-per-iter 16 \
-        --target 500 --output models/rl_v1
+        --target 500 --output models/rl_v2
 
 Resume:
   Wenn `<output>/state.json` existiert, wird der bestehende Stand aus
@@ -255,8 +255,8 @@ def run(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", type=Path, default=Path("models/rl_v1"))
-    parser.add_argument("--warm-start", type=Path, default=Path("models/v3/best.keras"))
+    parser.add_argument("--output", type=Path, default=Path("models/rl_v2"))
+    parser.add_argument("--warm-start", type=Path, default=Path("models/v5/best.keras"))
     parser.add_argument("--iterations", type=int, default=50)
     parser.add_argument("--games-per-iter", type=int, default=64)
     parser.add_argument("--target", type=int, default=500, help="Punkteziel pro Partie")

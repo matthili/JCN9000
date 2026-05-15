@@ -106,6 +106,11 @@ class HeuristicPlayer(Player):
         for suit in ALL_SUITS:
             scores[Announcement(variant=Variant.trumpf(suit))] = self._score_trumpf(hand, suit)
 
+        # Gumpf bewerten: gleicher Trumpf-Anteil wie Trumpf, aber Non-Trumpf-Asse
+        # sind nichts mehr wert (6er übernehmen), darum eigene Bewertungsfunktion.
+        for suit in ALL_SUITS:
+            scores[Announcement(variant=Variant.gumpf(suit))] = self._score_gumpf(hand, suit)
+
         oben_score = self._score_oben(hand)
         unten_score = self._score_unten(hand)
         scores[Announcement(variant=Variant.oben())] = oben_score
@@ -162,6 +167,28 @@ class HeuristicPlayer(Player):
             else:
                 score += NON_TRUMP_HAND_VALUES.get(c.rank, 0)
         return score
+
+    @staticmethod
+    def _score_gumpf(hand: list[Card], trumpf: Suit) -> int:
+        """Gumpf konservativ bewerten.
+
+        Die Variante wird in der echten Praxis seltener gespielt, und die
+        Heuristik soll Trumpf bevorzugen, wenn beides möglich ist. Konkrete
+        Konstruktion: Trumpf-Score als Basis (gleiche Trump-Bewertung) plus
+        ein moderater Bonus pro 6er in Nicht-Trumpf-Farben (die in Gumpf
+        sticht-relevant sind). Pauschaler Discount-Faktor von 0.85, damit
+        Gumpf nur bei klar passender Hand gewählt wird.
+
+        Bei balancierter Datengen wird die Verteilung der Varianten ohnehin
+        durch ForcedAnnouncementPlayer erzwungen, deshalb braucht die
+        Heuristik selbst keine "perfekte" Gumpf-Erkennung.
+        """
+        base = HeuristicPlayer._score_trumpf(hand, trumpf)
+        sixes_non_trump = sum(
+            1 for c in hand
+            if c.rank == Rank.SECHS and c.suit != trumpf
+        )
+        return int((base + sixes_non_trump * 3) * 0.85)
 
     @staticmethod
     def _score_oben(hand: list[Card]) -> int:
@@ -304,6 +331,30 @@ class HeuristicPlayer(Player):
             if non_trump_aces:
                 return non_trump_aces[0]
             # Sonst: niedrigste Nicht-Trumpf-Karte
+            non_trumps = [c for c in legal if c.suit != trumpf]
+            if non_trumps:
+                return min(non_trumps, key=lambda c: (
+                    card_value(c, state.variant),
+                    int(c.rank),
+                ))
+            return min(legal, key=lambda c: card_value(c, state.variant))
+
+        if state.variant.mode == PlayMode.GUMPF:
+            assert state.variant.trump_suit is not None
+            trumpf = state.variant.trump_suit
+            # In der Trumpf-Farbe: hohe Trümpfe ziehen wie bei Trumpf.
+            for special in (Rank.UNTER, Rank.NEUN, Rank.ASS):
+                c = Card(trumpf, special)
+                if c in legal:
+                    return c
+            # In Nicht-Trumpf-Farben: 6er sind die sicheren Sticher (Geiss-Logik).
+            non_trump_6 = [
+                c for c in legal
+                if c.suit != trumpf and c.rank == Rank.SECHS
+            ]
+            if non_trump_6:
+                return non_trump_6[0]
+            # Sonst: niedrigster Wert, niedriger Rang in Nicht-Trumpf.
             non_trumps = [c for c in legal if c.suit != trumpf]
             if non_trumps:
                 return min(non_trumps, key=lambda c: (
