@@ -28,18 +28,38 @@ from pathlib import Path
 DEFAULT_REPO = "matthili/jass-neuronales-netz"
 
 
-# Defensive Stubs fuer tensorflow_decision_forests / yggdrasil_decision_forests.
-# tensorflowjs >=4.22 importiert TFDF in tf_saved_model_conversion_v2.py blind.
-# TFDF hat aber einen Protobuf-Versionskonflikt mit TF 2.x (gencode 6.31 vs
-# runtime 5.29) und ist fuer ein MLP-Konvertierung sowieso unnoetig. Indem
-# wir leere Module in sys.modules platzieren, fragt der `import ...`-Befehl
-# nicht mehr die echte (kaputte) Library, sondern unseren leeren Stub.
+# Defensive Stubs fuer tensorflow_decision_forests + Yggdrasil-Decision-Forests.
+# tensorflowjs >=4.22 importiert diese Libs in tf_saved_model_conversion_v2.py
+# blind. Sie haben aber Protobuf-Versionskonflikte mit TF 2.x (gencode 6.31 vs
+# runtime 5.29) und werden fuer MLP-Konvertierung nicht gebraucht.
+#
+# Wir setzen "lebende" Stub-Module: ein Klassen-Trick, der auf jedes Attribut-
+# Zugriff einen weiteren Stub liefert. Damit klappt auch
+# `from tensorflow_decision_forests import keras` oder aehnliche tiefe Imports,
+# die ein leerer ModuleType nicht abdecken wuerde.
 #
 # WICHTIG: dieses Stubbing MUSS vor jedem `import tensorflowjs` stehen,
 # darum auf Modul-Ebene und nicht in main().
-for _stub_name in ("tensorflow_decision_forests", "yggdrasil_decision_forests"):
+class _SilentStubModule(types.ModuleType):
+    """ModuleType, der auf JEDEN Attribut-Zugriff einen weiteren SilentStub
+    liefert. Damit verhaelt sich das Modul wie ein leeres "Mockable" -- jede
+    Untermodul-Importzeile wird stillschweigend befriedigt, solange nichts
+    wirklich BENUTZT wird (was im MLP-Konvertierungs-Pfad auch nicht passiert).
+    """
+    def __getattr__(self, name):
+        sub = _SilentStubModule(f"{self.__name__}.{name}")
+        sys.modules[sub.__name__] = sub
+        setattr(self, name, sub)
+        return sub
+
+
+for _stub_name in (
+    "tensorflow_decision_forests",
+    "yggdrasil_decision_forests",
+    "ydf",
+):
     if _stub_name not in sys.modules:
-        sys.modules[_stub_name] = types.ModuleType(_stub_name)
+        sys.modules[_stub_name] = _SilentStubModule(_stub_name)
 
 
 def _sha256(path: Path) -> str:
@@ -65,10 +85,18 @@ def main():
         sys.exit("FEHLER: gh-CLI nicht gefunden.")
     # tensorflowjs als Python-Modul pruefen (nicht als CLI-Tool). Wir benutzen
     # die Python-API, damit der MaskBias-Custom-Layer korrekt registriert wird.
+    # Achtung: tensorflowjs's __init__.py importiert tf_saved_model_conversion_v2,
+    # das wiederum 'tensorflow_decision_forests' und Sub-Module davon importiert.
+    # Das kann auch andere Exception-Typen werfen als ImportError -- darum
+    # fangen wir hier breit und drucken den vollen Trace, damit wir die echte
+    # Ursache sehen.
     try:
         import tensorflowjs  # noqa: F401
-    except ImportError:
-        sys.exit("FEHLER: tensorflowjs nicht installiert. Bitte 'pip install \"tensorflowjs>=4.22\"'.")
+    except Exception as e:
+        import traceback
+        print("FEHLER beim tensorflowjs-Import:", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(f"  -> {type(e).__name__}: {e}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
