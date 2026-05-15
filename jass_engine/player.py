@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from jass_engine.card import Card
+from jass_engine.trick import CompletedTrick
 from jass_engine.variant import Announcement, Variant
 from jass_engine.weis import Weis
 
@@ -20,7 +21,7 @@ class GameState:
     current_trick_cards: list[Card]
     current_trick_starter: int
     teams: list[int] = field(default_factory=lambda: [0, 1, 0, 1])
-    completed_tricks: list[list[Card]] = field(default_factory=list)
+    completed_tricks: list[CompletedTrick] = field(default_factory=list)
     own_team_score: int = 0
     opp_team_score: int = 0
     round_idx: int = 0

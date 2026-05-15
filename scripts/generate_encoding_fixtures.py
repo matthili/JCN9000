@@ -20,12 +20,13 @@ import numpy as np
 
 from jass_engine.card import Card, Rank, Suit
 from jass_engine.player import GameState
+from jass_engine.trick import CompletedTrick
 from jass_engine.variant import Announcement, Variant
 from training.encoder import encode_state, legal_action_mask
 
 
 SPEC_VERSION = "1.0.0"
-ENCODING_VERSION = "1.0.0"
+ENCODING_VERSION = "2.0.0"
 
 
 def C(suit: Suit, rank: Rank) -> Card:
@@ -60,7 +61,11 @@ def state_to_dict(hand: list[Card], state: GameState) -> dict[str, Any]:
         "player_idx": state.player_idx,
         "teams": list(state.teams),
         "completed_tricks": [
-            [card_to_dict(c) for c in t] for t in state.completed_tricks
+            {
+                "starter": t.starter,
+                "cards": [card_to_dict(c) for c in t.cards],
+            }
+            for t in state.completed_tricks
         ],
         "own_team_score": state.own_team_score,
         "opp_team_score": state.opp_team_score,
@@ -85,7 +90,7 @@ def _make_state(
     announcement: Announcement | None = None,
     trick: list[Card] | None = None,
     starter: int = 0,
-    completed_tricks: list[list[Card]] | None = None,
+    completed_tricks: list[CompletedTrick] | None = None,
     teams: list[int] | None = None,
     own_score: int = 0,
     opp_score: int = 0,
@@ -99,7 +104,7 @@ def _make_state(
         current_trick_cards=list(trick or []),
         current_trick_starter=starter,
         teams=list(teams or [0, 1, 0, 1]),
-        completed_tricks=[list(t) for t in (completed_tricks or [])],
+        completed_tricks=list(completed_tricks or []),
         own_team_score=own_score,
         opp_team_score=opp_score,
         round_idx=round_idx,
@@ -310,15 +315,17 @@ def build_fixtures() -> list[Fixture]:
         ],
         state=_make_state(
             player_idx=2,
-            variant=Variant.unten(),  # effektive Variante in Stich 1
+            variant=Variant.unten(),
             announcement=Announcement(variant=Variant.oben(), slalom=True),
             trick_idx=1,
-            completed_tricks=[[
-                C(Suit.HERZ, Rank.ASS),
-                C(Suit.HERZ, Rank.SECHS),
-                C(Suit.HERZ, Rank.OBER),
-                C(Suit.HERZ, Rank.SIEBEN),
-            ]],
+            completed_tricks=[
+                CompletedTrick(starter=0, cards=(
+                    C(Suit.HERZ, Rank.ASS),
+                    C(Suit.HERZ, Rank.SECHS),
+                    C(Suit.HERZ, Rank.OBER),
+                    C(Suit.HERZ, Rank.SIEBEN),
+                )),
+            ],
         ),
     ))
 
@@ -327,7 +334,7 @@ def build_fixtures() -> list[Fixture]:
         id="fix_011_trumpf_mid_game_hoher_score",
         description=(
             "Trumpf-Laub, Spieler 0 in Stich 5, eigenes Team führt 87:64. Drei "
-            "abgeschlossene Stiche sind in der History."
+            "abgeschlossene Stiche sind in der History (mit Anspieler-Info)."
         ),
         hand=[
             C(Suit.LAUB, Rank.OBER),
@@ -339,12 +346,18 @@ def build_fixtures() -> list[Fixture]:
             player_idx=0,
             variant=Variant.trumpf(Suit.LAUB),
             completed_tricks=[
-                [C(Suit.LAUB, Rank.UNTER), C(Suit.LAUB, Rank.SECHS),
-                 C(Suit.LAUB, Rank.SIEBEN), C(Suit.LAUB, Rank.NEUN)],
-                [C(Suit.HERZ, Rank.ASS), C(Suit.HERZ, Rank.SIEBEN),
-                 C(Suit.HERZ, Rank.SECHS), C(Suit.HERZ, Rank.OBER)],
-                [C(Suit.SCHELLE, Rank.ASS), C(Suit.SCHELLE, Rank.SECHS),
-                 C(Suit.SCHELLE, Rank.SIEBEN), C(Suit.SCHELLE, Rank.NEUN)],
+                CompletedTrick(starter=0, cards=(
+                    C(Suit.LAUB, Rank.UNTER), C(Suit.LAUB, Rank.SECHS),
+                    C(Suit.LAUB, Rank.SIEBEN), C(Suit.LAUB, Rank.NEUN),
+                )),
+                CompletedTrick(starter=0, cards=(
+                    C(Suit.HERZ, Rank.ASS), C(Suit.HERZ, Rank.SIEBEN),
+                    C(Suit.HERZ, Rank.SECHS), C(Suit.HERZ, Rank.OBER),
+                )),
+                CompletedTrick(starter=0, cards=(
+                    C(Suit.SCHELLE, Rank.ASS), C(Suit.SCHELLE, Rank.SECHS),
+                    C(Suit.SCHELLE, Rank.SIEBEN), C(Suit.SCHELLE, Rank.NEUN),
+                )),
             ],
             trick_idx=3,
             own_score=87,

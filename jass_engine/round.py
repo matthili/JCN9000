@@ -12,7 +12,7 @@ from jass_engine.rules import (
     legal_moves,
     total_points_per_round,
 )
-from jass_engine.trick import Trick
+from jass_engine.trick import CompletedTrick, Trick
 from jass_engine.variant import Announcement, PlayMode
 from jass_engine.weis import (
     TeamWeisResult,
@@ -128,7 +128,10 @@ def play_round(
                 current_trick_cards=list(trick.cards),
                 current_trick_starter=trick.starting_player_idx,
                 teams=list(teams),
-                completed_tricks=[list(t.cards) for t in trick_results],
+                completed_tricks=[
+                    CompletedTrick(starter=t.starting_player_idx, cards=tuple(t.cards))
+                    for t in trick_results
+                ],
                 round_idx=round_idx,
                 trick_idx=trick_idx,
                 num_players=num_players,

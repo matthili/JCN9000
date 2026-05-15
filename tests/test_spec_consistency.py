@@ -23,6 +23,7 @@ from jsonschema import Draft202012Validator
 
 from jass_engine.card import Card, Rank, Suit
 from jass_engine.player import GameState
+from jass_engine.trick import CompletedTrick
 from jass_engine.variant import Announcement, Variant
 from scripts.generate_jass_rules_json import build_spec
 from training.encoder import encode_state, legal_action_mask
@@ -95,6 +96,13 @@ def _announcement_from_dict(d: dict) -> Announcement:
     )
 
 
+def _completed_trick_from_dict(d: dict) -> CompletedTrick:
+    return CompletedTrick(
+        starter=d["starter"],
+        cards=tuple(_card_from_dict(c) for c in d["cards"]),
+    )
+
+
 def _state_from_dict(d: dict) -> tuple[list[Card], GameState]:
     hand = [_card_from_dict(c) for c in d["hand"]]
     state = GameState(
@@ -105,7 +113,7 @@ def _state_from_dict(d: dict) -> tuple[list[Card], GameState]:
         current_trick_starter=d["current_trick_starter"],
         teams=list(d["teams"]),
         completed_tricks=[
-            [_card_from_dict(c) for c in trick] for trick in d["completed_tricks"]
+            _completed_trick_from_dict(trick) for trick in d["completed_tricks"]
         ],
         own_team_score=d["own_team_score"],
         opp_team_score=d["opp_team_score"],
@@ -161,10 +169,11 @@ def test_fixtures_legal_masks_reproduzierbar(fixtures_data):
 
 
 def test_fixtures_dimensionen(fixtures_data):
+    from training.encoder import INPUT_DIM
     for fix in fixtures_data["fixtures"]:
-        assert fix["expected"]["state_vector_shape"] == [132], fix["id"]
+        assert fix["expected"]["state_vector_shape"] == [INPUT_DIM], fix["id"]
         assert fix["expected"]["legal_mask_shape"] == [36], fix["id"]
-        assert len(fix["expected"]["state_vector"]) == 132
+        assert len(fix["expected"]["state_vector"]) == INPUT_DIM
         assert len(fix["expected"]["legal_mask"]) == 36
 
 

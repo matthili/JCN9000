@@ -84,6 +84,7 @@ def train(
     patience: int = 5,
     seed: int = 42,
     verbose: int = 2,
+    hidden_units: tuple[int, ...] | None = None,
 ) -> None:
     configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -91,11 +92,15 @@ def train(
     split = load_split(data_dir, val_fraction=val_fraction, seed=seed)
     print(
         f"\nModell wird aufgebaut (Input {split.train.X.shape[1]}, "
-        f"Aktionen {split.train.masks.shape[1]})…"
+        f"Aktionen {split.train.masks.shape[1]}, "
+        f"Hidden {hidden_units or 'Default'})…"
     )
+    from training.model import DEFAULT_HIDDEN
+    used_hidden = tuple(hidden_units) if hidden_units else DEFAULT_HIDDEN
     model = build_model(
         input_dim=split.train.X.shape[1],
         action_dim=split.train.masks.shape[1],
+        hidden_units=used_hidden,
         learning_rate=learning_rate,
     )
     model.summary(print_fn=lambda s: print("  " + s))
@@ -179,6 +184,10 @@ def main():
         help="0=still, 1=Live-Progressbar (kann auf WSL2/non-TTY langsam sein), "
              "2=eine Zeile pro Epoche (Default, empfohlen)",
     )
+    parser.add_argument(
+        "--hidden", type=int, nargs="+", default=None,
+        help="Versteckte Layer-Groessen, z.B. --hidden 512 512 256 (Default aus model.py)",
+    )
     args = parser.parse_args()
 
     train(
@@ -191,6 +200,7 @@ def main():
         patience=args.patience,
         seed=args.seed,
         verbose=args.verbose,
+        hidden_units=tuple(args.hidden) if args.hidden else None,
     )
 
 

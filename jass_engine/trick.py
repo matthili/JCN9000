@@ -9,6 +9,19 @@ from jass_engine.rules import trick_points, trick_winner
 from jass_engine.variant import Variant
 
 
+@dataclass(frozen=True)
+class CompletedTrick:
+    """Abgeschlossener Stich mit Anspieler-Info -- wird in GameState.completed_tricks
+    gespeichert, damit der Encoder spaeter weiss, wer welche Karte gespielt hat."""
+
+    starter: int
+    cards: tuple[Card, ...]
+
+    def player_idx_for_card(self, card_pos: int, num_players: int = 4) -> int:
+        """Spieler-Index fuer die Karte an Position `card_pos` (0..3)."""
+        return (self.starter + card_pos) % num_players
+
+
 @dataclass
 class Trick:
     """Ein einzelner Stich.
