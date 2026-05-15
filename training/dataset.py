@@ -34,7 +34,12 @@ class SplitDataset:
 
 
 def load_shards(data_dir: str | Path) -> list[Path]:
-    return sorted(Path(data_dir).glob("*.npz"))
+    """Findet alle .npz-Shards rekursiv unter data_dir.
+
+    Unterstuetzt sowohl flache Verzeichnisse (data/heuristic_50k/shard_*.npz)
+    als auch verschachtelte Layouts (data/balanced/trumpf_eichel/shard_*.npz).
+    """
+    return sorted(Path(data_dir).rglob("*.npz"))
 
 
 def _load_concat(shards: list[Path]) -> Dataset:
