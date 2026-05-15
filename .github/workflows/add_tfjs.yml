@@ -47,6 +47,12 @@ jobs:
           # Engine + Modell-Code installieren, damit MaskBias-Custom-Layer beim
           # Modell-Laden korrekt aufgeloest wird (siehe add_tfjs_to_release.py).
           pip install -e .
+          # TFDF + Yggdrasil deinstallieren -- werden von tensorflowjs als
+          # transitive Dep mitgeschleppt, haben aber Protobuf-Versionskonflikte
+          # (gencode 6.31 vs runtime 5.29). Fuer ein MLP-Modell brauchen wir
+          # sie nicht; das Skript stubbt sie defensiv auch in sys.modules.
+          pip uninstall -y tensorflow_decision_forests ydf || true
+          pip uninstall -y yggdrasil-decision-forests || true
 
       - name: Tag-Name bestimmen
         id: tag

@@ -20,11 +20,26 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import zipfile
 from pathlib import Path
 
 
 DEFAULT_REPO = "matthili/jass-neuronales-netz"
+
+
+# Defensive Stubs fuer tensorflow_decision_forests / yggdrasil_decision_forests.
+# tensorflowjs >=4.22 importiert TFDF in tf_saved_model_conversion_v2.py blind.
+# TFDF hat aber einen Protobuf-Versionskonflikt mit TF 2.x (gencode 6.31 vs
+# runtime 5.29) und ist fuer ein MLP-Konvertierung sowieso unnoetig. Indem
+# wir leere Module in sys.modules platzieren, fragt der `import ...`-Befehl
+# nicht mehr die echte (kaputte) Library, sondern unseren leeren Stub.
+#
+# WICHTIG: dieses Stubbing MUSS vor jedem `import tensorflowjs` stehen,
+# darum auf Modul-Ebene und nicht in main().
+for _stub_name in ("tensorflow_decision_forests", "yggdrasil_decision_forests"):
+    if _stub_name not in sys.modules:
+        sys.modules[_stub_name] = types.ModuleType(_stub_name)
 
 
 def _sha256(path: Path) -> str:
