@@ -1,0 +1,41 @@
+# Zeilenenden-Normalisierung: alle Text-Dateien werden in Git intern mit LF
+# gespeichert, unabhaengig vom Schreib-System. Damit gibt es keinen
+# Cross-Platform-Drift mehr zwischen PowerShell (CRLF-Default) und WSL2 (LF).
+#
+# Auf Windows-Arbeitskopien kann das User-Setting `core.autocrlf` bestimmen,
+# ob die Files mit CRLF aus dem Repo geholt werden -- aber die *versionierte*
+# Form bleibt immer LF, was Diffs sauber haelt und Spec-Drift verhindert.
+
+* text=auto eol=lf
+
+# ----- Text-Dateien, die in dieser Pipeline kritisch sind -----
+*.py       text eol=lf
+*.json     text eol=lf
+*.md       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.sh       text eol=lf
+*.txt      text eol=lf
+*.csv      text eol=lf
+*.toml     text eol=lf
+*.cfg      text eol=lf
+*.ini      text eol=lf
+*.html     text eol=lf
+*.css      text eol=lf
+*.js       text eol=lf
+*.ts       text eol=lf
+
+# ----- Binaerdaten: nie konvertieren -----
+*.keras    binary
+*.h5       binary
+*.npz      binary
+*.npy      binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
+*.pdf      binary
+*.zip      binary
+*.tar.gz   binary
+*.whl      binary
