@@ -68,6 +68,20 @@ UNTEN_HAND_VALUES: dict[Rank, int] = {
     Rank.ZEHN: 2,
 }
 
+# Gumpf-Nicht-Trumpf-Werte: ungefaehr halbiert von UNTEN_HAND_VALUES.
+# In Gumpf gibt es nur ~5 Nicht-Trumpf-Stiche (statt 9 wie bei Geiss), weil ~4
+# Stiche in der Trumpf-Farbe gespielt werden. Zudem koennen Trumpf-Karten (Buur,
+# Nell, ...) jeden Nicht-Trumpf-Stich kapern -- die sichere 6er-Stich-Logik aus
+# Geiss gilt darum nur eingeschraenkt. Pragmatische Kalibrierung; Domain-Tuning
+# spaeter moeglich, falls Eval zeigt dass Gumpf zu selten/oft gewaehlt wird.
+GUMPF_NON_TRUMP_VALUES: dict[Rank, int] = {
+    Rank.SECHS: 6,
+    Rank.SIEBEN: 4,
+    Rank.ACHT: 4,
+    Rank.NEUN: 2,
+    Rank.ZEHN: 1,
+}
+
 
 class HeuristicPlayer(Player):
     """Regelbasierter Spieler mit Schmier-/Stech-/Spar-Strategie."""
@@ -79,8 +93,21 @@ class HeuristicPlayer(Player):
         slalom_base_factor: float = 0.95,
         slalom_concentration_factor: int = 2,
         slalom_spread_factor: int = 1,
+        allowed_modes: set[PlayMode] | None = None,
+        allow_slalom: bool = True,
         rng: random.Random | None = None,
     ):
+        """
+        Args:
+            allowed_modes: Erlaubte PlayMode-Werte fuer die Ansage. None = alle
+                erlaubt (Default: TRUMPF, GUMPF, OBEN, UNTEN). Beispiel fuer
+                Tisch-Hausregel "kein Gumpf":
+                    allowed_modes={PlayMode.TRUMPF, PlayMode.OBEN, PlayMode.UNTEN}
+            allow_slalom: Wenn False, wird die Slalom-Ansage komplett gefiltert.
+                Default True. Orthogonal zu allowed_modes (Slalom kombiniert mit
+                OBEN bzw. UNTEN, die jeweils in allowed_modes liegen muessen,
+                damit ueberhaupt was uebrig bleibt).
+        """
         super().__init__(name)
         self.push_threshold = push_threshold
         # Slalom-Score = max(oben, unten) * base_factor
@@ -91,6 +118,8 @@ class HeuristicPlayer(Player):
         self.slalom_base_factor = slalom_base_factor
         self.slalom_concentration_factor = slalom_concentration_factor
         self.slalom_spread_factor = slalom_spread_factor
+        self.allowed_modes = allowed_modes  # None heisst "alle"
+        self.allow_slalom = allow_slalom
         self.rng = rng if rng is not None else random.Random()
 
     # ---------- Ansage ----------
@@ -147,6 +176,28 @@ class HeuristicPlayer(Player):
         )
         scores[Announcement(variant=slalom_start_variant, slalom=True)] = slalom_score
 
+        # Hausregel-Filter: erlaubte PlayModes + Slalom-Flag.
+        # Wir filtern erst NACH der Score-Berechnung, damit die Logik fuer alle
+        # Optionen einheitlich ist und die zweitbeste Wahl automatisch greift,
+        # wenn die Top-Option verboten ist.
+        if self.allowed_modes is not None:
+            scores = {
+                a: s for a, s in scores.items()
+                if a.variant.mode in self.allowed_modes
+            }
+        if not self.allow_slalom:
+            scores = {a: s for a, s in scores.items() if not a.slalom}
+
+        if not scores:
+            # Pathologischer Fall: alle Optionen wurden weggefiltert. Schieben,
+            # falls erlaubt; sonst die schwaechste Variante zur Not nehmen.
+            if can_push:
+                return None
+            raise ValueError(
+                "HeuristicPlayer hat keine erlaubte Ansage-Option uebrig "
+                "(allowed_modes/allow_slalom zu restriktiv und kein Schieben moeglich)."
+            )
+
         best_ann = max(scores, key=lambda a: scores[a])
         best_score = scores[best_ann]
 
@@ -170,25 +221,31 @@ class HeuristicPlayer(Player):
 
     @staticmethod
     def _score_gumpf(hand: list[Card], trumpf: Suit) -> int:
-        """Gumpf konservativ bewerten.
+        """Gumpf zweistufig bewerten:
 
-        Die Variante wird in der echten Praxis seltener gespielt, und die
-        Heuristik soll Trumpf bevorzugen, wenn beides möglich ist. Konkrete
-        Konstruktion: Trumpf-Score als Basis (gleiche Trump-Bewertung) plus
-        ein moderater Bonus pro 6er in Nicht-Trumpf-Farben (die in Gumpf
-        sticht-relevant sind). Pauschaler Discount-Faktor von 0.85, damit
-        Gumpf nur bei klar passender Hand gewählt wird.
+        1) Trumpf-Anteil wie bei der Trumpf-Variante (Buur=25, Nell=18, Ass=12, ...).
+           Mengen-Bonus fuer >3 Truempfe ebenso.
+        2) Nicht-Trumpf-Anteil mit Geiss-aehnlicher Bewertung (niedrige Karten
+           wertvoll, hohe wertlos) -- aber gedaempft, weil Trump-Karten der
+           Gegner die Geiss-Logik in Nicht-Trumpf-Stichen brechen koennen.
 
-        Bei balancierter Datengen wird die Verteilung der Varianten ohnehin
-        durch ForcedAnnouncementPlayer erzwungen, deshalb braucht die
-        Heuristik selbst keine "perfekte" Gumpf-Erkennung.
+        Effekt:
+        - Hand mit Buur+Nell+Asse + niedrige Karten in Nicht-Trumpf
+          -> Gumpf > Trumpf (Lehrbuch-Gumpf-Hand)
+        - Hand mit Buur+Nell+Asse + hohe Karten (Asse/Zehner) in Nicht-Trumpf
+          -> Trumpf > Gumpf (Lehrbuch-Trumpf-Hand)
+        - Hand ohne Top-Truempfe (kein Buur/Nell) -> Gumpf-Score bleibt niedrig
+          (Trump-Anteil dominant)
         """
-        base = HeuristicPlayer._score_trumpf(hand, trumpf)
-        sixes_non_trump = sum(
-            1 for c in hand
-            if c.rank == Rank.SECHS and c.suit != trumpf
-        )
-        return int((base + sixes_non_trump * 3) * 0.85)
+        score = 0
+        trump_count = sum(1 for c in hand if c.suit == trumpf)
+        score += max(0, trump_count - 3) * 6
+        for c in hand:
+            if c.suit == trumpf:
+                score += TRUMP_HAND_VALUES[c.rank]
+            else:
+                score += GUMPF_NON_TRUMP_VALUES.get(c.rank, 0)
+        return score
 
     @staticmethod
     def _score_oben(hand: list[Card]) -> int:

@@ -193,8 +193,13 @@ def test_opening_unten_sechs():
 
 # ---------- Ansage ----------
 
-def test_ansage_buur_und_nell_macht_trumpf_attraktiv():
-    """Mit Buur und Nell in Eichel sollte Eichel als Trumpf gewählt werden."""
+def test_ansage_buur_und_nell_mit_niedrigem_rest_macht_gumpf_attraktiv():
+    """Lehrbuch-Gumpf: Buur+Nell+Ass+Koenig in einer Farbe als sichere Top-
+    Truempfe, plus durchgehend niedrige Karten (6/7) in den Nicht-Trumpf-Farben.
+    Da die niedrigen Karten in Gumpf nach Geiss-Logik bewertet werden (6 sticht
+    in der Lead-Farbe alles), ist Gumpf hier signifikant besser als reines
+    Trumpf-Spiel.
+    """
     bot = HeuristicPlayer("Bot")
     hand = [
         C(Suit.EICHEL, Rank.UNTER),  # Buur
@@ -209,8 +214,78 @@ def test_ansage_buur_und_nell_macht_trumpf_attraktiv():
     ]
     ann = bot.choose_announcement(hand, round_idx=0, can_push=False)
     assert ann is not None
+    assert ann.variant.mode == PlayMode.GUMPF
+    assert ann.variant.trump_suit == Suit.EICHEL
+
+
+def test_ansage_buur_und_nell_mit_hohem_rest_macht_trumpf_attraktiv():
+    """Gegenstueck: Buur+Nell+Ass+Koenig in Eichel, aber **hohe** Karten in
+    den Nicht-Trumpf-Farben (Asse, Zehner). Da hohe Karten in Gumpf nach
+    Geiss-Logik wertlos sind, gewinnt hier Trumpf-Eichel.
+    """
+    bot = HeuristicPlayer("Bot")
+    hand = [
+        C(Suit.EICHEL, Rank.UNTER),  # Buur
+        C(Suit.EICHEL, Rank.NEUN),    # Nell
+        C(Suit.EICHEL, Rank.ASS),
+        C(Suit.EICHEL, Rank.KOENIG),
+        C(Suit.HERZ, Rank.ASS),
+        C(Suit.HERZ, Rank.ZEHN),
+        C(Suit.LAUB, Rank.ASS),
+        C(Suit.LAUB, Rank.ZEHN),
+        C(Suit.SCHELLE, Rank.ASS),
+    ]
+    ann = bot.choose_announcement(hand, round_idx=0, can_push=False)
+    assert ann is not None
     assert ann.variant.mode == PlayMode.TRUMPF
     assert ann.variant.trump_suit == Suit.EICHEL
+
+
+def test_ansage_gumpf_verboten_faellt_auf_trumpf_zurueck():
+    """Hausregel 'kein Gumpf': bei einer Lehrbuch-Gumpf-Hand muss die Heuristik
+    sauber auf die zweitbeste Wahl (Trumpf-Eichel) zurueckfallen.
+    """
+    bot = HeuristicPlayer(
+        "Bot",
+        allowed_modes={PlayMode.TRUMPF, PlayMode.OBEN, PlayMode.UNTEN},
+    )
+    hand = [
+        C(Suit.EICHEL, Rank.UNTER),
+        C(Suit.EICHEL, Rank.NEUN),
+        C(Suit.EICHEL, Rank.ASS),
+        C(Suit.EICHEL, Rank.KOENIG),
+        C(Suit.HERZ, Rank.SECHS),
+        C(Suit.HERZ, Rank.SIEBEN),
+        C(Suit.LAUB, Rank.SECHS),
+        C(Suit.LAUB, Rank.SIEBEN),
+        C(Suit.SCHELLE, Rank.SECHS),
+    ]
+    ann = bot.choose_announcement(hand, round_idx=0, can_push=False)
+    assert ann is not None
+    assert ann.variant.mode == PlayMode.TRUMPF
+    assert ann.variant.trump_suit == Suit.EICHEL
+
+
+def test_ansage_slalom_verboten():
+    """Wenn allow_slalom=False, darf die Heuristik niemals Slalom waehlen, auch
+    nicht bei einer Hand, die sonst klar Slalom favorisiert."""
+    bot = HeuristicPlayer("Bot", allow_slalom=False)
+    hand = [
+        # Eichel: 6, 7, 8, 9 (4 unten-starke Karten)
+        C(Suit.EICHEL, Rank.SECHS),
+        C(Suit.EICHEL, Rank.SIEBEN),
+        C(Suit.EICHEL, Rank.ACHT),
+        C(Suit.EICHEL, Rank.NEUN),
+        # Laub: Ober, Koenig, Ass (3 oben-starke Karten)
+        C(Suit.LAUB, Rank.OBER),
+        C(Suit.LAUB, Rank.KOENIG),
+        C(Suit.LAUB, Rank.ASS),
+        C(Suit.HERZ, Rank.ASS),
+        C(Suit.SCHELLE, Rank.SECHS),
+    ]
+    ann = bot.choose_announcement(hand, round_idx=0, can_push=False)
+    assert ann is not None
+    assert ann.slalom is False
 
 
 def test_ansage_viele_asse_macht_bock_attraktiv():
