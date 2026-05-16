@@ -42,6 +42,7 @@ from tensorflow import keras
 
 from training.encoder import ACTION_DIM, INPUT_DIM
 from training.model import MaskBias, build_model  # noqa: F401 (MaskBias-Registrierung)
+from training.rl.parallel_selfplay import ParallelSelfPlayPool
 from training.rl.ppo import ppo_train_step
 from training.rl.selfplay import collect_trajectories
 from training.rl.trajectory import compute_gae, stack_trajectories
@@ -110,6 +111,7 @@ def run(
     seed: int,
     verbose: int,
     heuristic_mix_rate: float = 0.3,
+    workers: int = 1,
 ) -> None:
     configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -141,6 +143,27 @@ def run(
 
     optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
+    # Parallel-Self-Play-Pool initialisieren (nur wenn workers > 1).
+    # Die Workers laden initial das aktuelle Modell aus 'final.keras' (oder
+    # warm_start, wenn kein Resume); spaeter werden nur noch Gewichte per
+    # Queue synchronisiert.
+    selfplay_pool: ParallelSelfPlayPool | None = None
+    if workers > 1:
+        # Workers brauchen einen Pfad zum initialen Modell -- nutze den Pfad,
+        # aus dem auch der Hauptprozess geladen hat. Falls Resume: final.keras
+        # existiert bereits. Falls erster Lauf: speichere kurz nach final.keras
+        # (sicherer Weg, damit alle Workers identische Architektur sehen).
+        worker_model_path = output_dir / "final.keras"
+        if not worker_model_path.exists():
+            _save_snapshot(model, worker_model_path)
+        print(
+            f"\nInitialisiere ParallelSelfPlayPool ({workers} Workers, CPU-only)..."
+        )
+        selfplay_pool = ParallelSelfPlayPool(
+            num_workers=workers,
+            initial_model_path=worker_model_path,
+        )
+
     log_path = output_dir / LOG_FILENAME
     log_exists = log_path.exists()
     log_file = log_path.open("a", newline="", encoding="utf-8")
@@ -159,13 +182,22 @@ def run(
             print(f"\n=== RL-Iteration {it + 1} (in dieser Session {it - start_iter + 1}/{iterations}) ===")
 
         # 1) Self-Play (ggf. mit Heuristik-Anker als Anti-Drift)
-        trajs = collect_trajectories(
-            model=model,
-            num_games=games_per_iter,
-            target_score=target_score,
-            seed=seed + it,
-            heuristic_mix_rate=heuristic_mix_rate,
-        )
+        if selfplay_pool is not None:
+            trajs = selfplay_pool.collect(
+                weights=model.get_weights(),
+                num_games_total=games_per_iter,
+                seed=seed + it,
+                target_score=target_score,
+                heuristic_mix_rate=heuristic_mix_rate,
+            )
+        else:
+            trajs = collect_trajectories(
+                model=model,
+                num_games=games_per_iter,
+                target_score=target_score,
+                seed=seed + it,
+                heuristic_mix_rate=heuristic_mix_rate,
+            )
         sp_secs = time.perf_counter() - t0
         n_transitions = sum(len(t) for t in trajs)
         mean_reward = float(np.mean([
@@ -245,6 +277,12 @@ def run(
         })
 
     log_file.close()
+
+    # Pool sauber beenden (sentinel + join)
+    if selfplay_pool is not None:
+        print("\nBeende Self-Play-Worker-Pool...")
+        selfplay_pool.close()
+
     print(
         f"\nRL-Training-Session fertig. "
         f"Letzte Iteration: {end_iter - 1}. "
@@ -276,6 +314,15 @@ def main():
         help="Anteil Partien (0..1), in denen das RL-Team gegen 2 Heuristik-Gegner "
              "spielt. Als Anti-Drift-Anker bei Self-Play. Default 0.3.",
     )
+    parser.add_argument(
+        "--workers", type=int, default=1,
+        help=(
+            "Anzahl paralleler Self-Play-Worker (CPU-only Modell pro Worker). "
+            "Default 1 = sequentielles Self-Play im Hauptprozess. Empfehlung fuer "
+            ">=16-Kern-CPU: --workers 16. Workers leben ueber alle Iterationen; "
+            "die Modell-Gewichte werden pro Iteration via Queue synchronisiert."
+        ),
+    )
     args = parser.parse_args()
 
     run(
@@ -296,6 +343,7 @@ def main():
         seed=args.seed,
         verbose=args.verbose,
         heuristic_mix_rate=args.heuristic_mix_rate,
+        workers=args.workers,
     )
 
 
