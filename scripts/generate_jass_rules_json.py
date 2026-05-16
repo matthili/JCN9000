@@ -29,7 +29,7 @@ from jass_engine.weis import (
 )
 
 
-SPEC_VERSION = "1.1.0"  # +Gumpf-Variante (additiv, kein Bruch)
+SPEC_VERSION = "1.2.0"  # +score_composition, +play_order_anchor (additiv, kein Bruch)
 
 GAME_NAME = "Vorarlberger Kreuz-Jass"
 GAME_DESCRIPTION = (
@@ -319,6 +319,44 @@ def build_spec() -> dict:
                 "müssen sich zu 157 (bzw. 257 bei Matsch) summieren — wichtige "
                 "Konsistenzprüfung in jeder Engine-Implementierung."
             ),
+            "score_composition": {
+                "description": (
+                    "Wie die Rundenwertung pro Team aus den einzelnen Punkt-Quellen "
+                    "zusammengesetzt wird. Eine kompatible Engine-Implementierung muss "
+                    "diese Formel exakt einhalten, sonst weichen Statistiken und "
+                    "Konsistenz-Prüfungen zwischen Engines voneinander ab."
+                ),
+                "formula": (
+                    "team_total_points[team] = team_card_points[team] "
+                    "+ team_weise_points[team] + team_stoecke_points[team]"
+                ),
+                "team_card_points_formula": (
+                    "team_card_points[team] = "
+                    "Σ trick_points(t) für t in tricks von team "
+                    "+ (MATCH_BONUS wenn matsch_team == team else 0)"
+                ),
+                "trick_points_formula": (
+                    "trick_points(t) = Σ card_value(c, variant) für c in t.cards "
+                    "+ (LAST_TRICK_BONUS wenn t letzter Stich der Runde else 0)"
+                ),
+                "match_bonus_handling": "added_to_team_card_points",
+                "match_bonus_handling_note": (
+                    "Der MATCH_BONUS (100) wird DIREKT zu team_card_points[team] "
+                    "addiert, nicht in einem separaten Feld geführt. Konsistenz-"
+                    "Prüfung: sum(team_card_points.values()) == "
+                    "TOTAL_POINTS_PER_ROUND + (MATCH_BONUS wenn Matsch vorliegt). "
+                    "Konkret: 157 ohne Matsch, 257 mit Matsch."
+                ),
+                "last_trick_bonus_handling": (
+                    "Der LAST_TRICK_BONUS (5) ist bereits in trick_points des "
+                    "letzten Stichs enthalten, somit transitiv in team_card_points. "
+                    "Kein separates Feld."
+                ),
+                "fields_outside_team_card_points": [
+                    "team_weise_points",
+                    "team_stoecke_points",
+                ],
+            },
         },
 
         "weise": {
@@ -331,6 +369,15 @@ def build_spec() -> dict:
                 "primary_sort_key": "weis_points_descending",
                 "secondary_sort_key": "top_rank_descending",
                 "tie_breaker": "earlier_in_play_order_wins",
+                "play_order_anchor": "original_announcer",
+                "play_order_definition": (
+                    "play_order = [(announcer_idx + i) mod num_players "
+                    "für i in 0..num_players-1]. Der Anker ist der ursprüngliche "
+                    "Ansager (announcer_idx), auch wenn er an seinen Partner "
+                    "geschoben hat. Konsistent zur Konvention, dass der erste "
+                    "Stich vom ursprünglichen Ansager ausgespielt wird "
+                    "(siehe round_flow.trick_start.first_trick)."
+                ),
                 "stoecke_independent": True,
             },
             "announce_timing": "before_first_trick",

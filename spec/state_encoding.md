@@ -151,12 +151,23 @@ Bei `is_trumpf=1` oder `is_gumpf=1` ist genau ein Bit gesetzt. In allen anderen 
 
 ### Detail: Spieler-Zuordnung in Played/Current-Trick
 
-Pro Stich (sowohl abgeschlossen als auch laufend) wird die `starter`-Position genutzt, um aus der Karten-Position im Stich die Spieler-Identität zu rekonstruieren:
+**Trick-Card-Ordering-Konvention (HART):** `current_trick_cards` und `CompletedTrick.cards` sind **play-order-indexiert**, nicht seat-indexiert. Das heißt: Position `k` im Stich enthält die Karte, die der `k+1`-te ausspielende Spieler dieses Stichs gelegt hat. Konkret:
+
+```
+cards[0] = Karte von Sitz starter
+cards[1] = Karte von Sitz (starter + 1) mod num_players
+cards[2] = Karte von Sitz (starter + 2) mod num_players
+cards[3] = Karte von Sitz (starter + 3) mod num_players
+```
+
+Daraus folgt für die Encoder-Logik:
 
 ```
 spieler_der_karte_position_k = (starter + k) mod num_players
 relative_position = (spieler_der_karte_position_k - my_seat) mod num_players
 ```
+
+**Konsequenz für Engine-Implementierungen:** Wer `current_trick_cards` als seat-indexierte Liste pflegen würde (`cards[seat]` statt `cards[play_order]`), würde alle Encoder-Sektionen `current_trick_by_*` und `played_by_*` falsch befüllen — die Position eines Spielers im aktuellen Stich wäre nicht mehr aus `(starter + k) mod num_players` rekonstruierbar. Diese Konvention gilt für beide Stich-Container (`current_trick_cards` für den laufenden Stich, `CompletedTrick.cards` für abgeschlossene Stiche).
 
 ### Detail: leerer Stich
 
