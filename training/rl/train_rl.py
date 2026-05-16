@@ -42,6 +42,7 @@ from tensorflow import keras
 
 from training.encoder import ACTION_DIM, INPUT_DIM
 from training.model import MaskBias, build_model  # noqa: F401 (MaskBias-Registrierung)
+from training.rl.batched_selfplay import collect_trajectories_batched
 from training.rl.parallel_selfplay import ParallelSelfPlayPool
 from training.rl.ppo import ppo_train_step
 from training.rl.selfplay import collect_trajectories
@@ -112,6 +113,8 @@ def run(
     verbose: int,
     heuristic_mix_rate: float = 0.3,
     workers: int = 1,
+    inference_mode: str = "sequential",
+    inference_batch_size: int = 64,
 ) -> None:
     configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -143,16 +146,17 @@ def run(
 
     optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
 
-    # Parallel-Self-Play-Pool initialisieren (nur wenn workers > 1).
-    # Die Workers laden initial das aktuelle Modell aus 'final.keras' (oder
-    # warm_start, wenn kein Resume); spaeter werden nur noch Gewichte per
-    # Queue synchronisiert.
+    # Self-Play-Modus auswerten:
+    #   - "sequential": klassisch sequentiell im Hauptprozess (langsam, einfach)
+    #   - "cpu-workers": ParallelSelfPlayPool, Workers mit CPU-Inferenz
+    #   - "batched-gpu": batched_selfplay.collect_trajectories_batched,
+    #     N parallele Threads + Server mit GPU-Batch-Inferenz
     selfplay_pool: ParallelSelfPlayPool | None = None
-    if workers > 1:
-        # Workers brauchen einen Pfad zum initialen Modell -- nutze den Pfad,
-        # aus dem auch der Hauptprozess geladen hat. Falls Resume: final.keras
-        # existiert bereits. Falls erster Lauf: speichere kurz nach final.keras
-        # (sicherer Weg, damit alle Workers identische Architektur sehen).
+    if inference_mode == "cpu-workers":
+        if workers <= 1:
+            raise ValueError(
+                "inference_mode='cpu-workers' braucht workers > 1."
+            )
         worker_model_path = output_dir / "final.keras"
         if not worker_model_path.exists():
             _save_snapshot(model, worker_model_path)
@@ -162,6 +166,18 @@ def run(
         selfplay_pool = ParallelSelfPlayPool(
             num_workers=workers,
             initial_model_path=worker_model_path,
+        )
+    elif inference_mode == "batched-gpu":
+        print(
+            f"\nSelf-Play-Modus: batched-gpu "
+            f"(threading + InferenceServer, Batch <= {inference_batch_size})"
+        )
+    elif inference_mode == "sequential":
+        pass  # Default-Pfad, nichts zu tun
+    else:
+        raise ValueError(
+            f"Unbekannter inference_mode: {inference_mode!r}. "
+            f"Erlaubt: 'sequential', 'cpu-workers', 'batched-gpu'."
         )
 
     log_path = output_dir / LOG_FILENAME
@@ -182,7 +198,7 @@ def run(
             print(f"\n=== RL-Iteration {it + 1} (in dieser Session {it - start_iter + 1}/{iterations}) ===")
 
         # 1) Self-Play (ggf. mit Heuristik-Anker als Anti-Drift)
-        if selfplay_pool is not None:
+        if inference_mode == "cpu-workers" and selfplay_pool is not None:
             trajs = selfplay_pool.collect(
                 weights=model.get_weights(),
                 num_games_total=games_per_iter,
@@ -190,7 +206,17 @@ def run(
                 target_score=target_score,
                 heuristic_mix_rate=heuristic_mix_rate,
             )
+        elif inference_mode == "batched-gpu":
+            trajs = collect_trajectories_batched(
+                model=model,
+                num_games=games_per_iter,
+                target_score=target_score,
+                seed=seed + it,
+                heuristic_mix_rate=heuristic_mix_rate,
+                max_batch_size=inference_batch_size,
+            )
         else:
+            # sequential (Default)
             trajs = collect_trajectories(
                 model=model,
                 num_games=games_per_iter,
@@ -317,10 +343,28 @@ def main():
     parser.add_argument(
         "--workers", type=int, default=1,
         help=(
-            "Anzahl paralleler Self-Play-Worker (CPU-only Modell pro Worker). "
-            "Default 1 = sequentielles Self-Play im Hauptprozess. Empfehlung fuer "
-            ">=16-Kern-CPU: --workers 16. Workers leben ueber alle Iterationen; "
-            "die Modell-Gewichte werden pro Iteration via Queue synchronisiert."
+            "Anzahl paralleler Self-Play-Worker (nur fuer --inference-mode "
+            "cpu-workers). Default 1 = sequentielles Self-Play im Hauptprozess."
+        ),
+    )
+    parser.add_argument(
+        "--inference-mode",
+        choices=["sequential", "cpu-workers", "batched-gpu"],
+        default="sequential",
+        help=(
+            "Wie die Self-Play-Inferenzen gemacht werden:\n"
+            "  sequential   = klassisch, eine Inferenz pro Stich im Hauptprozess\n"
+            "  cpu-workers  = N Worker-Prozesse, CPU-only, GIL-frei (Variante C)\n"
+            "  batched-gpu  = ein Process, N Game-Threads + GPU-Inferenz-Server,\n"
+            "                 echte Batch-Inferenz auf der GPU (Variante D)"
+        ),
+    )
+    parser.add_argument(
+        "--inference-batch-size", type=int, default=64,
+        help=(
+            "Nur fuer --inference-mode batched-gpu: maximale Batch-Groesse, "
+            "die der InferenceServer sammelt, bevor er das Modell aufruft. "
+            "Default 64. Sinnvoller Wert: ~num_games oder ein Bisschen drunter."
         ),
     )
     args = parser.parse_args()
@@ -344,6 +388,8 @@ def main():
         verbose=args.verbose,
         heuristic_mix_rate=args.heuristic_mix_rate,
         workers=args.workers,
+        inference_mode=args.inference_mode,
+        inference_batch_size=args.inference_batch_size,
     )
 
 
