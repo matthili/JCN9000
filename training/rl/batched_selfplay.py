@@ -121,6 +121,56 @@ class InferenceServer:
             raise RuntimeError("Server hat keine Antwort geschrieben.")
         return req.response[0]
 
+    def request_many(
+        self,
+        states: list[np.ndarray],
+        masks: list[np.ndarray],
+    ) -> list[tuple[np.ndarray, float]]:
+        """Schickt N Anfragen gleichzeitig in die Queue und sammelt die
+        Ergebnisse ein. Der Server-Loop wird die Anfragen in einem oder
+        wenigen grossen Batches verarbeiten -- Idealfall fuer vektorisierte
+        Rollouts mit ~50 Inferenzen pro Decision.
+
+        Returns: Liste der (policy_vec, value_scalar)-Tupel, gleiche
+        Reihenfolge wie die Eingaben.
+        """
+        if self._fatal_error is not None:
+            raise RuntimeError(
+                f"InferenceServer ist gestorben: {self._fatal_error!r}"
+            )
+        if len(states) != len(masks):
+            raise ValueError(
+                f"states ({len(states)}) und masks ({len(masks)}) muessen gleich lang sein"
+            )
+        if not states:
+            return []
+
+        # Alle Requests in einem Rutsch in die Queue. Der Server-Loop wird
+        # sie ueber `get_nowait` greedy einsammeln (bis max_batch_size).
+        requests: list[_Request] = []
+        for s, m in zip(states, masks):
+            req = _Request(state=s, mask=m, event=threading.Event())
+            self._queue.put(req)
+            requests.append(req)
+
+        # Auf alle Antworten warten
+        results: list[tuple[np.ndarray, float]] = []
+        for req in requests:
+            if not req.event.wait(timeout=self.request_timeout_s):
+                raise TimeoutError(
+                    f"InferenceServer hat in {self.request_timeout_s}s nicht "
+                    f"geantwortet (request_many)."
+                )
+            if self._fatal_error is not None:
+                raise RuntimeError(
+                    f"InferenceServer ist während request_many gestorben: "
+                    f"{self._fatal_error!r}"
+                )
+            if req.response[0] is None:
+                raise RuntimeError("Server hat keine Antwort geschrieben.")
+            results.append(req.response[0])
+        return results
+
     def _loop(self) -> None:
         """Server-Hauptschleife (laeuft in eigenem Thread)."""
         try:

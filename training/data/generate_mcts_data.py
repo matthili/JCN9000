@@ -43,6 +43,7 @@ from jass_engine.variants.kreuz_jass import KREUZ_JASS_TEAMS, play_kreuz_jass
 from players.forced_announcement_player import ForcedAnnouncementPlayer
 from players.heuristic_player import HeuristicPlayer
 from training.data.mcts_lookahead import mcts_lookahead_best_card
+from training.data.vectorized_lookahead import compute_card_scores_vectorized
 from training.encoder import ACTION_DIM, INPUT_DIM, encode_state, legal_action_mask
 from training.rl.batched_selfplay import InferenceServer
 
@@ -90,11 +91,13 @@ class MCTSAugmentedPlayer(Player):
         rollouts_per_card: int,
         rng: random.Random,
         fallback_for_announce: Player | None = None,
+        lookahead_mode: str = "single-trick",
     ):
         super().__init__(name)
         self.inference_server = inference_server
         self.rollouts_per_card = rollouts_per_card
         self.rng = rng
+        self.lookahead_mode = lookahead_mode
         self.fallback = fallback_for_announce or HeuristicPlayer(
             name + "_fb", rng=random.Random(rng.randint(0, 10**9))
         )
@@ -115,14 +118,25 @@ class MCTSAugmentedPlayer(Player):
         x = encode_state(hand, state).astype(np.float32)
         mask = legal_action_mask(hand, state).astype(np.uint8)
 
-        result = mcts_lookahead_best_card(
-            hand=hand,
-            state=state,
-            inference_server=self.inference_server,
-            rollouts_per_card=self.rollouts_per_card,
-            rng=self.rng,
-        )
-        chosen = result.best_card
+        if self.lookahead_mode == "full-round-vec":
+            scores = compute_card_scores_vectorized(
+                hand=hand,
+                state=state,
+                inference_server=self.inference_server,
+                rollouts_per_card=self.rollouts_per_card,
+                rng=self.rng,
+            )
+            chosen = max(scores, key=lambda c: scores[c])
+        else:
+            # Default: single-trick-Lookahead
+            result = mcts_lookahead_best_card(
+                hand=hand,
+                state=state,
+                inference_server=self.inference_server,
+                rollouts_per_card=self.rollouts_per_card,
+                rng=self.rng,
+            )
+            chosen = result.best_card
 
         # Trainings-Sample aufzeichnen
         from training.encoder import card_index
@@ -143,6 +157,7 @@ def _play_one_variant_game(
     rollouts_per_card: int,
     target_score: int,
     seed: int,
+    lookahead_mode: str = "single-trick",
 ) -> tuple[list[np.ndarray], list[np.ndarray], list[int], list[float]]:
     """Spielt EINE Partie mit erzwungener Ansage, gibt
     (states, masks, actions, rewards) zurueck.
@@ -168,6 +183,7 @@ def _play_one_variant_game(
             rollouts_per_card=rollouts_per_card,
             rng=sub_rng,
             fallback_for_announce=fallback,
+            lookahead_mode=lookahead_mode,
         )
         players.append(p)
         mcts_players.append(p)
@@ -223,6 +239,7 @@ def generate_for_variant(
     inference_server: InferenceServer,
     parallel_threads: int,
     seed: int,
+    lookahead_mode: str = "single-trick",
 ) -> int:
     """Sammelt `games_per_variant` Partien dieser Variante und schreibt einen
     Shard nach output_dir/<variant>/shard_00000.npz.
@@ -254,6 +271,7 @@ def generate_for_variant(
                 rollouts_per_card,
                 target_score,
                 s,
+                lookahead_mode,
             )
             for s in seeds
         ]
@@ -322,6 +340,19 @@ def main():
         "--variants", nargs="+", default=None,
         help="Nur bestimmte Varianten (Label). Default: alle 12.",
     )
+    parser.add_argument(
+        "--lookahead-mode",
+        choices=["single-trick", "full-round-vec"],
+        default="full-round-vec",
+        help=(
+            "Lookahead-Tiefe und Vektorisierung:\n"
+            "  single-trick    = nur den aktuellen Stich rollouten (schnell, "
+            "wenig GPU-Last, schwaecherer Lehrer)\n"
+            "  full-round-vec  = bis zum Rundenende rollouten, alle Rollouts "
+            "pro Decision parallel als ein Batch (volle GPU-Last, "
+            "strategisch besserer Lehrer). Default."
+        ),
+    )
     args = parser.parse_args()
 
     selected = ALL_VARIANTS
@@ -359,6 +390,7 @@ def main():
                 inference_server=server,
                 parallel_threads=args.parallel_threads,
                 seed=args.seed + hash(vs.label) % 10000,
+                lookahead_mode=args.lookahead_mode,
             )
             total_samples += n
         elapsed = time.perf_counter() - t0
