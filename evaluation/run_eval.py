@@ -27,6 +27,7 @@ import sys
 import time
 from pathlib import Path
 
+from evaluation.batched_eval import two_team_match_batched_gpu
 from evaluation.elo import EloRating
 from evaluation.tournament import (
     format_tournament_summary,
@@ -106,6 +107,30 @@ def main():
             "Empfehlung fuer NN-Eval auf >=16-Kern-CPU: --workers 8 oder 16."
         ),
     )
+    parser.add_argument(
+        "--inference-mode",
+        choices=["sequential", "cpu-workers", "batched-gpu"],
+        default="sequential",
+        help=(
+            "Wie die Inferenzen ablaufen:\n"
+            "  sequential   = klassisch, ein Process, eine Inferenz pro Stich\n"
+            "  cpu-workers  = N Subprocesses mit CPU-only-TF (entspricht --workers > 1)\n"
+            "  batched-gpu  = ein Process, viele Game-Threads + GPU-Inferenz-Server\n"
+            "                 mit Batch-Inferenz (analog zum RL-batched-Mode).\n"
+            "                 Schnellster Modus fuer NN-Eval auf einer GPU."
+        ),
+    )
+    parser.add_argument(
+        "--inference-batch-size", type=int, default=64,
+        help="Nur fuer --inference-mode batched-gpu: max. Server-Batch-Groesse.",
+    )
+    parser.add_argument(
+        "--parallel-threads", type=int, default=128,
+        help=(
+            "Nur fuer --inference-mode batched-gpu: max. gleichzeitig spielende "
+            "Game-Threads. Sollte ungefaehr inference_batch_size sein."
+        ),
+    )
     args = parser.parse_args()
 
     model_a = args.model_a if args.model_a is not None else args.model
@@ -119,12 +144,53 @@ def main():
     label_a = _label(args.a, model_a, "A")
     label_b = _label(args.b, model_b, "B")
 
-    if args.workers > 1:
-        # Parallel-Pfad: Elo deaktiviert (siehe two_team_match_parallel-Doku)
+    # Inference-Mode-Verzweigung. --workers > 1 ist Abkuerzung fuer cpu-workers.
+    effective_mode = args.inference_mode
+    if effective_mode == "sequential" and args.workers > 1:
+        # Rückwärtskompatibel: alte Aufrufe mit --workers > 1 ohne expliziten
+        # inference_mode landen auf cpu-workers.
+        effective_mode = "cpu-workers"
+
+    if effective_mode == "batched-gpu":
         if args.save_elo or args.load_elo:
             print(
-                "[warn] --save-elo / --load-elo werden im Parallel-Modus "
-                "(--workers > 1) ignoriert."
+                "[warn] --save-elo / --load-elo werden im batched-gpu-Modus "
+                "ignoriert."
+            )
+        print(
+            f"Tournament: {label_a} vs. {label_b}  "
+            f"({args.games} Partien, batched-gpu, "
+            f"batch <= {args.inference_batch_size}, "
+            f"threads = {args.parallel_threads})"
+        )
+        start = time.perf_counter()
+        result = two_team_match_batched_gpu(
+            label_a=label_a,
+            kind_a=args.a,
+            model_a=model_a,
+            label_b=label_b,
+            kind_b=args.b,
+            model_b=model_b,
+            num_games=args.games,
+            target_score=args.target,
+            seed=args.seed,
+            swap_seats_each_half=not args.no_swap_seats,
+            inference_batch_size=args.inference_batch_size,
+            parallel_threads=args.parallel_threads,
+        )
+        elapsed = time.perf_counter() - start
+        print(format_tournament_summary(result))
+        print(
+            f"\nDauer: {elapsed:.1f} s  "
+            f"({elapsed / args.games * 1000:.1f} ms/Partie, batched-gpu)"
+        )
+        return
+
+    if effective_mode == "cpu-workers":
+        if args.save_elo or args.load_elo:
+            print(
+                "[warn] --save-elo / --load-elo werden im cpu-workers-Modus "
+                "ignoriert."
             )
         print(
             f"Tournament: {label_a} vs. {label_b}  "
