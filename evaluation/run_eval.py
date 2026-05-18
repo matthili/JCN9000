@@ -131,6 +131,16 @@ def main():
             "Game-Threads. Sollte ungefaehr inference_batch_size sein."
         ),
     )
+    parser.add_argument(
+        "--paired-eval", action="store_true",
+        help=(
+            "Gepaarte Bewertung: pro Paar zwei Spiele mit IDENTISCHER "
+            "Kartenverteilung -- einmal Modell A auf Sitzen 0+2, einmal auf "
+            "1+3. Eliminiert das Karten-Glueck als Rauschquelle und macht "
+            "kleine Staerkenunterschiede zwischen Modellen sichtbar. "
+            "Setzt voraus, dass --games gerade ist (sonst Fehler)."
+        ),
+    )
     args = parser.parse_args()
 
     model_a = args.model_a if args.model_a is not None else args.model
@@ -157,9 +167,10 @@ def main():
                 "[warn] --save-elo / --load-elo werden im batched-gpu-Modus "
                 "ignoriert."
             )
+        paired_str = ", paired-eval" if args.paired_eval else ""
         print(
             f"Tournament: {label_a} vs. {label_b}  "
-            f"({args.games} Partien, batched-gpu, "
+            f"({args.games} Partien, batched-gpu{paired_str}, "
             f"batch <= {args.inference_batch_size}, "
             f"threads = {args.parallel_threads})"
         )
@@ -177,6 +188,7 @@ def main():
             swap_seats_each_half=not args.no_swap_seats,
             inference_batch_size=args.inference_batch_size,
             parallel_threads=args.parallel_threads,
+            paired_eval=args.paired_eval,
         )
         elapsed = time.perf_counter() - start
         print(format_tournament_summary(result))
@@ -192,9 +204,10 @@ def main():
                 "[warn] --save-elo / --load-elo werden im cpu-workers-Modus "
                 "ignoriert."
             )
+        paired_str = ", paired-eval" if args.paired_eval else ""
         print(
             f"Tournament: {label_a} vs. {label_b}  "
-            f"({args.games} Partien, {args.workers} Worker)"
+            f"({args.games} Partien, {args.workers} Worker{paired_str})"
         )
         start = time.perf_counter()
         result = two_team_match_parallel(
@@ -209,6 +222,7 @@ def main():
             target_score=args.target,
             seed=args.seed,
             swap_seats_each_half=not args.no_swap_seats,
+            paired_eval=args.paired_eval,
         )
         elapsed = time.perf_counter() - start
         print(format_tournament_summary(result))
@@ -223,7 +237,8 @@ def main():
     factory_b = _make_factory(args.b, model_b)
     elo = EloRating.load_json(args.load_elo) if args.load_elo else EloRating()
 
-    print(f"Tournament: {label_a} vs. {label_b}  ({args.games} Partien)")
+    paired_str = ", paired-eval" if args.paired_eval else ""
+    print(f"Tournament: {label_a} vs. {label_b}  ({args.games} Partien{paired_str})")
     start = time.perf_counter()
     result = two_team_match(
         label_a=label_a,
@@ -235,6 +250,7 @@ def main():
         seed=args.seed,
         swap_seats_each_half=not args.no_swap_seats,
         elo=elo,
+        paired_eval=args.paired_eval,
     )
     elapsed = time.perf_counter() - start
 

@@ -51,6 +51,7 @@ def two_team_match(
     seed: int = 0,
     swap_seats_each_half: bool = True,
     elo: EloRating | None = None,
+    paired_eval: bool = False,
 ) -> TournamentResult:
     """Spielt N Partien Team-A vs Team-B.
 
@@ -61,8 +62,14 @@ def two_team_match(
         target_score: Punkteziel pro Partie (Default 1000)
         seed: RNG-Seed fuer Reproduzierbarkeit
         swap_seats_each_half: Tauscht in der zweiten Haelfte die Sitzplaetze,
-            damit moegliche Sitz-Boni egalisiert sind
+            damit moegliche Sitz-Boni egalisiert sind. Wird ignoriert, wenn
+            paired_eval=True.
         elo: optionales bestehendes Elo, wird mit den Resultaten aktualisiert
+        paired_eval: Bei True werden die Partien als Paare gespielt: in jedem
+            Paar dieselbe Kartenverteilung, einmal A auf Sitzen 0+2 und
+            einmal A auf 1+3. Damit faellt das Glueck der Kartenverteilung
+            als Rauschquelle weg -- nur echte Spielentscheidungen erzeugen
+            noch Punkteunterschiede. Setzt voraus, dass num_games gerade ist.
     """
     rng = random.Random(seed)
     stats_a = TeamStats()
@@ -70,11 +77,28 @@ def two_team_match(
     if elo is None:
         elo = EloRating()
 
-    half = num_games // 2 if swap_seats_each_half else num_games
+    # Liste von (swap_seats, sub_seed)-Tupeln vorbereiten
+    if paired_eval:
+        if num_games % 2 != 0:
+            raise ValueError(
+                "paired_eval=True braucht eine gerade Zahl an Partien "
+                f"(num_games={num_games})."
+            )
+        plan: list[tuple[bool, int]] = []
+        for _pair_idx in range(num_games // 2):
+            pair_seed = rng.randint(0, 10**9)
+            plan.append((False, pair_seed))  # A auf 0+2
+            plan.append((True, pair_seed))   # A auf 1+3, gleiche Karten
+    else:
+        half = num_games // 2 if swap_seats_each_half else num_games
+        plan = [
+            (swap_seats_each_half and game_idx >= half, rng.randint(0, 10**9))
+            for game_idx in range(num_games)
+        ]
 
-    for game_idx in range(num_games):
-        if swap_seats_each_half and game_idx >= half:
-            # In der zweiten Haelfte: Team A sitzt auf 1+3 statt 0+2
+    for swap_seats, sub_seed in plan:
+        sub_rng = random.Random(sub_seed)
+        if swap_seats:
             seat_to_factory = {0: factory_b, 1: factory_a, 2: factory_b, 3: factory_a}
             team_a_team_id = 1
             team_b_team_id = 0
@@ -84,13 +108,13 @@ def two_team_match(
             team_b_team_id = 1
 
         players = [
-            seat_to_factory[i](i, random.Random(rng.randint(0, 10**9)))
+            seat_to_factory[i](i, random.Random(sub_rng.randint(0, 10**9)))
             for i in range(4)
         ]
         game = play_kreuz_jass(
             players,
             target_score=target_score,
-            rng=random.Random(rng.randint(0, 10**9)),
+            rng=random.Random(sub_rng.randint(0, 10**9)),
         )
 
         update_stats_from_game(
@@ -178,7 +202,7 @@ def _eval_worker(args: tuple) -> tuple[TeamStats, TeamStats]:
     (
         kind_a, model_a, kind_b, model_b,
         num_games, target_score, seed, swap_seats_each_half,
-        label_a, label_b,
+        label_a, label_b, paired_eval,
     ) = args
     factory_a = _build_factory_in_worker(kind_a, model_a)
     factory_b = _build_factory_in_worker(kind_b, model_b)
@@ -192,6 +216,7 @@ def _eval_worker(args: tuple) -> tuple[TeamStats, TeamStats]:
         seed=seed,
         swap_seats_each_half=swap_seats_each_half,
         elo=EloRating(),  # Worker-Elo wird verworfen
+        paired_eval=paired_eval,
     )
     return result.stats_a, result.stats_b
 
@@ -208,6 +233,7 @@ def two_team_match_parallel(
     target_score: int = 1000,
     seed: int = 0,
     swap_seats_each_half: bool = True,
+    paired_eval: bool = False,
 ) -> TournamentResult:
     """Parallel-Variante von two_team_match.
 
@@ -219,10 +245,27 @@ def two_team_match_parallel(
     Spiel-fuer-Spiel-Updates braucht und das nicht ohne Datenverlust ueber
     Worker-Grenzen aggregierbar ist. Wenn du Elo brauchst, lass workers=1.
     """
-    # Spiele aufteilen
-    base = num_games // workers
-    remainder = num_games % workers
-    batch_sizes = [base + (1 if i < remainder else 0) for i in range(workers)]
+    # Spiele aufteilen. Bei paired_eval=True muessen Batch-Groessen gerade
+    # sein, damit kein Paar zerrissen wird.
+    if paired_eval:
+        if num_games % 2 != 0:
+            raise ValueError(
+                "paired_eval=True braucht eine gerade Zahl an Partien "
+                f"(num_games={num_games})."
+            )
+        # Verteile Paare statt Einzelspiele, damit jeder Worker komplette
+        # Paare bekommt (das Worker-interne two_team_match braucht gerade Zahlen).
+        num_pairs = num_games // 2
+        base_pairs = num_pairs // workers
+        remainder_pairs = num_pairs % workers
+        batch_sizes = [
+            (base_pairs + (1 if i < remainder_pairs else 0)) * 2
+            for i in range(workers)
+        ]
+    else:
+        base = num_games // workers
+        remainder = num_games % workers
+        batch_sizes = [base + (1 if i < remainder else 0) for i in range(workers)]
     # Pro Worker eindeutiger Seed, abgeleitet vom Master-Seed
     seeds = [seed + i * 10_000_003 for i in range(workers)]
 
@@ -234,7 +277,7 @@ def two_team_match_parallel(
             kind_a, str(model_a) if model_a else None,
             kind_b, str(model_b) if model_b else None,
             batch, target_score, sub_seed, swap_seats_each_half,
-            label_a, label_b,
+            label_a, label_b, paired_eval,
         ))
 
     # spawn-Context: jeder Worker startet einen frischen Python-Interpreter.

@@ -157,6 +157,7 @@ def two_team_match_batched_gpu(
     swap_seats_each_half: bool = True,
     inference_batch_size: int = 64,
     parallel_threads: int = 128,
+    paired_eval: bool = False,
 ) -> TournamentResult:
     """Eval mit Threading + GPU-Inferenz-Server.
 
@@ -205,16 +206,38 @@ def two_team_match_batched_gpu(
 
     try:
         rng = random.Random(seed)
-        half = num_games // 2 if swap_seats_each_half else num_games
 
-        # Game-Jobs vorbereiten (mit deterministischem Seed pro Spiel)
+        # Game-Jobs vorbereiten (mit deterministischem Seed pro Spiel).
+        # Bei paired_eval=True: pro Paar zwei Jobs mit demselben Seed --
+        # einmal swap=False, einmal swap=True. So sehen beide Modelle exakt
+        # dieselbe Kartenverteilung, nur in vertauschten Sitzplaetzen.
         jobs = []
-        for game_idx in range(num_games):
-            jobs.append({
-                "game_idx": game_idx,
-                "swap_seats": swap_seats_each_half and game_idx >= half,
-                "sub_seed": rng.randint(0, 10**9),
-            })
+        if paired_eval:
+            if num_games % 2 != 0:
+                raise ValueError(
+                    "paired_eval=True braucht eine gerade Zahl an Partien "
+                    f"(num_games={num_games})."
+                )
+            for pair_idx in range(num_games // 2):
+                pair_seed = rng.randint(0, 10**9)
+                jobs.append({
+                    "game_idx": pair_idx * 2,
+                    "swap_seats": False,
+                    "sub_seed": pair_seed,
+                })
+                jobs.append({
+                    "game_idx": pair_idx * 2 + 1,
+                    "swap_seats": True,
+                    "sub_seed": pair_seed,
+                })
+        else:
+            half = num_games // 2 if swap_seats_each_half else num_games
+            for game_idx in range(num_games):
+                jobs.append({
+                    "game_idx": game_idx,
+                    "swap_seats": swap_seats_each_half and game_idx >= half,
+                    "sub_seed": rng.randint(0, 10**9),
+                })
 
         # Threads: Pool mit `parallel_threads` Workern, sammelt Results
         results: list[tuple[GameResult, int, int]] = [None] * num_games  # type: ignore
