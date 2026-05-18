@@ -151,7 +151,17 @@ def train(
     seed: int = 42,
     verbose: int = 2,
     hidden_units: tuple[int, ...] | None = None,
+    warm_start: Path | None = None,
 ) -> None:
+    """Trainiert das Modell.
+
+    Args:
+        warm_start: optionaler Pfad zu einem bereits trainierten Modell
+            (.keras). Wenn gesetzt, werden die Gewichte uebernommen und das
+            Modell mit frischem Optimizer-State und der angegebenen
+            learning_rate weitertrainiert. `hidden_units` wird in dem Fall
+            ignoriert (Architektur kommt aus dem Modell).
+    """
     configure_gpu_memory()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -168,18 +178,43 @@ def train(
         f"  Val:   {val_samples:>12,} Samples in {len(shard_split.val_shards)} Shards"
     )
 
-    print(
-        f"\nModell wird aufgebaut (Input {INPUT_DIM}, Aktionen {ACTION_DIM}, "
-        f"Hidden {hidden_units or 'Default'})…"
-    )
-    from training.model import DEFAULT_HIDDEN
-    used_hidden = tuple(hidden_units) if hidden_units else DEFAULT_HIDDEN
-    model = build_model(
-        input_dim=INPUT_DIM,
-        action_dim=ACTION_DIM,
-        hidden_units=used_hidden,
-        learning_rate=learning_rate,
-    )
+    if warm_start is not None:
+        print(f"\nWarm-Start: lade Modell-Gewichte aus {warm_start}")
+        from training.model import MaskBias  # noqa: F401 -- triggert Registrierung
+        model = keras.models.load_model(str(warm_start))
+        # Frischer Optimizer + Loss-Konfig mit der konfigurierten learning_rate.
+        # Verhindert, dass der gespeicherte Optimizer-State (z.B. mit anderer
+        # learning_rate aus Phase 1) das Weitertraining bremst.
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
+            loss={
+                "policy": "sparse_categorical_crossentropy",
+                "value": "mean_squared_error",
+            },
+            loss_weights={"policy": 1.0, "value": 0.5},
+            metrics={
+                "policy": ["accuracy"],
+                "value": ["mae"],
+            },
+        )
+        if hidden_units is not None:
+            print(
+                f"  Hinweis: --hidden {hidden_units} wird bei Warm-Start ignoriert "
+                f"(Architektur kommt aus dem Modell)."
+            )
+    else:
+        print(
+            f"\nModell wird aufgebaut (Input {INPUT_DIM}, Aktionen {ACTION_DIM}, "
+            f"Hidden {hidden_units or 'Default'})…"
+        )
+        from training.model import DEFAULT_HIDDEN
+        used_hidden = tuple(hidden_units) if hidden_units else DEFAULT_HIDDEN
+        model = build_model(
+            input_dim=INPUT_DIM,
+            action_dim=ACTION_DIM,
+            hidden_units=used_hidden,
+            learning_rate=learning_rate,
+        )
     model.summary(print_fn=lambda s: print("  " + s))
 
     # Bei Multi-Output-Modellen heisst die Metric "val_policy_accuracy" statt "val_accuracy"
@@ -277,6 +312,14 @@ def main():
         "--hidden", type=int, nargs="+", default=None,
         help="Versteckte Layer-Groessen, z.B. --hidden 512 512 256 (Default aus model.py)",
     )
+    parser.add_argument(
+        "--warm-start", type=str, default=None,
+        help=(
+            "Optional: Pfad zu einem bereits trainierten Modell (.keras). "
+            "Gewichte werden uebernommen, Optimizer-State frisch initialisiert. "
+            "--hidden wird in diesem Fall ignoriert."
+        ),
+    )
     args = parser.parse_args()
 
     train(
@@ -290,6 +333,7 @@ def main():
         seed=args.seed,
         verbose=args.verbose,
         hidden_units=tuple(args.hidden) if args.hidden else None,
+        warm_start=Path(args.warm_start) if args.warm_start else None,
     )
 
 
