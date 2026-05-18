@@ -240,14 +240,28 @@ def generate_for_variant(
     parallel_threads: int,
     seed: int,
     lookahead_mode: str = "single-trick",
+    chunk_idx: int = 0,
+    skip_existing: bool = False,
 ) -> int:
     """Sammelt `games_per_variant` Partien dieser Variante und schreibt einen
-    Shard nach output_dir/<variant>/shard_00000.npz.
+    Shard nach output_dir/<variant>/shard_<chunk_idx:05d>.npz.
 
-    Returns: Anzahl Samples im Shard.
+    Args:
+        chunk_idx: Index des zu schreibenden Shards (Default 0). Im Chunk-Queue-
+            Modus produziert ein Worker mehrere Shards pro Variante, jeweils mit
+            unterschiedlichem chunk_idx.
+        skip_existing: Wenn True und die Ziel-Shard-Datei schon existiert, wird
+            uebersprungen (Returns 0). Praktisch zum Wiederaufnehmen nach Crash.
+
+    Returns: Anzahl Samples im Shard (0 wenn keine Daten generiert).
     """
     sub_dir = output_dir / variant_spec.output_subdir
     sub_dir.mkdir(parents=True, exist_ok=True)
+
+    out_path = sub_dir / f"shard_{chunk_idx:05d}.npz"
+    if skip_existing and out_path.exists():
+        print(f"    [{variant_spec.label}#{chunk_idx}] Shard existiert schon, ueberspringe.")
+        return 0
 
     base_rng = random.Random(seed)
     seeds = [base_rng.randint(0, 10**9) for _ in range(games_per_variant)]
@@ -286,7 +300,7 @@ def generate_for_variant(
                 elapsed = time.perf_counter() - start
                 rate = completed / elapsed if elapsed > 0 else 0
                 print(
-                    f"    [{variant_spec.label}] {completed}/{games_per_variant} "
+                    f"    [{variant_spec.label}#{chunk_idx}] {completed}/{games_per_variant} "
                     f"Partien fertig ({rate:.2f}/s, {len(all_states)} Samples)"
                 )
 
@@ -298,10 +312,9 @@ def generate_for_variant(
     A = np.array(all_actions, dtype=np.uint8)
     R = np.array(all_rewards, dtype=np.float32)
 
-    out_path = sub_dir / "shard_00000.npz"
     np.savez_compressed(out_path, X=X, masks=M, actions=A, rewards=R)
     print(
-        f"    [{variant_spec.label}] Shard geschrieben: "
+        f"    [{variant_spec.label}#{chunk_idx}] Shard geschrieben: "
         f"{out_path} ({len(A):,} Samples, {out_path.stat().st_size / 2**20:.1f} MB)"
     )
     return len(A)

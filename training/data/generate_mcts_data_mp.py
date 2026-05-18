@@ -1,29 +1,38 @@
-"""Multiprocessing-Variante der MCTS-Datengen.
+"""Multiprocessing-Variante der MCTS-Datengen mit Chunk-Queue-Distribution.
 
 Architektur (anders als generate_mcts_data.py):
-- Der Hauptprozess teilt die Varianten auf N Worker-Prozesse auf.
-- Jeder Worker-Prozess:
-    * laedt **selbst** TensorFlow und das Modell auf der GPU
-    * faehrt einen eigenen InferenceServer-Thread fuer Batch-Inferenz
-    * laeuft `parallel-threads-per-worker` Game-Threads parallel
-- Multiprocessing umgeht das GIL (Global Interpreter Lock = Pythons Sperre,
-  die im selben Prozess echte parallele Threads verhindert). Damit
-  konkurrieren die Worker NICHT um CPU-Zeit, jeder hat seine eigene Python-VM.
-- Alle Worker teilen sich die GPU: jeder allokiert per Memory-Growth so viel
-  VRAM wie er braucht (typisch 1-1.5 GB pro Worker). Auf einer RTX 3060 mit
-  12 GB sind 4-6 Worker problemlos.
-- Pro Worker schickt der InferenceServer-Thread seine Batches direkt zur GPU.
-  Die GPU bekommt damit gleichzeitig mehrere Inferenz-Stroeme; das CUDA-
-  Scheduling staffelt sie sauber.
+- Der Hauptprozess teilt das Pensum nicht in feste Varianten-Bloecke, sondern
+  in viele kleine **Chunks** (z.B. 50 Spiele pro Chunk) auf. Bei 12 Varianten
+  x 500 Spielen und Chunk-Groesse 50 sind das 120 Chunks.
+- Die Chunks landen in einer ueber Prozess-Grenzen geteilten Queue
+  (multiprocessing.Manager.Queue).
+- N Worker-Prozesse holen sich Chunks dynamisch aus der Queue. Sobald ein
+  Worker fertig ist, schnappt er den naechsten verfuegbaren Chunk -- damit
+  bleibt der Load-Balancing-Verlust am Ende des Laufs minimal.
+
+Jeder Worker-Prozess:
+- laedt **selbst** TensorFlow und das Modell auf der GPU
+- faehrt einen eigenen InferenceServer-Thread fuer Batch-Inferenz
+- laeuft `parallel-threads-per-worker` Game-Threads parallel innerhalb eines Chunks
+- arbeitet sich durch beliebig viele Chunks ab, bis die Queue leer ist
+
+Multiprocessing umgeht das GIL (Global Interpreter Lock); pro GPU sind 4-8
+Worker mit Memory-Growth gut machbar. Auf RTX 3060 12GB sind 8 sicher.
+
+Pro Chunk entsteht eine eigene Shard-Datei
+`<output>/<variant>/shard_<chunk_idx:05d>.npz`. Wenn ein Lauf abbricht (Crash,
+Stromausfall), bleiben bereits geschriebene Shards erhalten und koennen mit
+`--skip-existing` beim Wiederaufnehmen uebersprungen werden.
 
 Aufruf:
     python -u -m training.data.generate_mcts_data_mp \\
         --warm-start models/v5/best.keras \\
-        --games-per-variant 72 \\
+        --games-per-variant 500 \\
+        --games-per-chunk 50 \\
         --rollouts-per-card 30 \\
         --target 1000 \\
-        --workers 4 \\
-        --parallel-threads-per-worker 8 \\
+        --workers 8 \\
+        --parallel-threads-per-worker 32 \\
         --inference-batch-size 1024 \\
         --lookahead-mode full-round-vec \\
         --output data/mcts/phase1
@@ -44,21 +53,18 @@ from training.data.generate_mcts_data import (
 
 def _worker_process(
     worker_id: int,
-    variant_specs: list,
+    task_queue,
     args_dict: dict,
 ) -> None:
     """Wird in einem separaten Prozess gestartet (spawn-Context).
 
     Laedt eigenes TensorFlow + Modell, faehrt einen eigenen InferenceServer
-    und generiert die ihm zugeteilten Varianten.
+    und arbeitet Chunks aus der geteilten Queue ab, bis Sentinel kommt.
     """
     import os
     import sys
-    # TF-Logs leiser
+
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-    # Unbuffered stdout/stderr -- damit Worker-print-Ausgaben sofort im
-    # Hauptterminal sichtbar werden statt im Pipe-Buffer zu haengen.
-    # `python -u` wirkt nur fuer den Hauptprozess; Worker brauchen das selbst.
     try:
         sys.stdout.reconfigure(line_buffering=True)
         sys.stderr.reconfigure(line_buffering=True)
@@ -68,8 +74,6 @@ def _worker_process(
     import tensorflow as tf
     from tensorflow import keras
 
-    # Memory-Growth: Worker allokieren GPU-Speicher inkrementell, sodass
-    # alle Worker sich die GPU teilen koennen.
     gpus = tf.config.list_physical_devices("GPU")
     for g in gpus:
         try:
@@ -77,51 +81,83 @@ def _worker_process(
         except RuntimeError:
             pass
 
-    # Modell + Custom-Layer-Registrierung
     from training.model import MaskBias  # noqa: F401
+
     print(f"[Worker {worker_id}] Lade Modell auf GPU: {args_dict['warm_start']}")
     model = keras.models.load_model(args_dict["warm_start"])
 
-    # Inferenz-Server (eigen pro Worker)
     from training.rl.batched_selfplay import InferenceServer
+
     server = InferenceServer(
         model=model,
         max_batch_size=args_dict["inference_batch_size"],
     )
 
-    # Importe nach TF-Setup
     from training.data.generate_mcts_data import generate_for_variant
 
-    print(
-        f"[Worker {worker_id}] Bereit. {len(variant_specs)} Varianten zugeteilt: "
-        f"{[vs.label for vs in variant_specs]}"
-    )
-
     output_dir = Path(args_dict["output"])
-    seed_base = args_dict["seed"] + worker_id * 1_000_003
+    skip_existing = args_dict.get("skip_existing", False)
+
+    chunks_done = 0
+    t0 = time.perf_counter()
 
     try:
-        t0 = time.perf_counter()
-        for vs in variant_specs:
-            print(f"\n[Worker {worker_id}] === Variante {vs.label} ===")
+        while True:
+            task = task_queue.get()
+            if task is None:  # sentinel
+                break
+
+            variant_spec, chunk_idx, games_in_chunk, seed = task
+            print(
+                f"\n[Worker {worker_id}] === {variant_spec.label} chunk {chunk_idx} "
+                f"({games_in_chunk} Spiele) ==="
+            )
             generate_for_variant(
                 output_dir=output_dir,
-                variant_spec=vs,
-                games_per_variant=args_dict["games_per_variant"],
+                variant_spec=variant_spec,
+                games_per_variant=games_in_chunk,
                 rollouts_per_card=args_dict["rollouts_per_card"],
                 target_score=args_dict["target"],
                 inference_server=server,
                 parallel_threads=args_dict["parallel_threads_per_worker"],
-                seed=seed_base + hash(vs.label) % 10_000,
+                seed=seed,
                 lookahead_mode=args_dict["lookahead_mode"],
+                chunk_idx=chunk_idx,
+                skip_existing=skip_existing,
             )
+            chunks_done += 1
+
         elapsed = time.perf_counter() - t0
         print(
-            f"\n[Worker {worker_id}] Alle {len(variant_specs)} Varianten fertig "
-            f"in {elapsed / 60:.1f} min."
+            f"\n[Worker {worker_id}] {chunks_done} Chunks abgearbeitet in "
+            f"{elapsed / 60:.1f} min."
         )
     finally:
         server.shutdown()
+
+
+def _build_chunk_tasks(
+    selected: list[VariantSpec],
+    games_per_variant: int,
+    games_per_chunk: int,
+    base_seed: int,
+) -> list[tuple]:
+    """Baut eine Liste von Chunk-Tasks: (variant_spec, chunk_idx, games_in_chunk, seed).
+
+    Jeder Chunk bekommt einen eindeutigen Seed, abgeleitet aus base_seed +
+    Variant-Hash + chunk_idx-Stride. Damit ist die Datengen reproduzierbar.
+    """
+    tasks = []
+    for vs in selected:
+        n_chunks = (games_per_variant + games_per_chunk - 1) // games_per_chunk
+        for chunk_idx in range(n_chunks):
+            games_in_chunk = min(
+                games_per_chunk,
+                games_per_variant - chunk_idx * games_per_chunk,
+            )
+            seed = base_seed + hash(vs.label) % 10_000 + chunk_idx * 17
+            tasks.append((vs, chunk_idx, games_in_chunk, seed))
+    return tasks
 
 
 def main():
@@ -132,11 +168,18 @@ def main():
     )
     parser.add_argument(
         "--games-per-variant", type=int, default=72,
-        help="Wieviele Partien pro Variante.",
+        help="Gesamtanzahl Spiele pro Variante.",
+    )
+    parser.add_argument(
+        "--games-per-chunk", type=int, default=50,
+        help=(
+            "Wieviele Spiele pro Chunk. Kleiner = mehr Tasks, besseres Load-Balancing, "
+            "aber mehr Shard-Dateien. Default 50."
+        ),
     )
     parser.add_argument(
         "--rollouts-per-card", type=int, default=30,
-        help="Wieviele Rollouts pro legaler Karte (mehr = stabilerer Lehrer, mehr Compute).",
+        help="Wieviele Rollouts pro legaler Karte.",
     )
     parser.add_argument("--target", type=int, default=1000)
     parser.add_argument("--output", type=str, default="data/mcts/phase1")
@@ -145,16 +188,15 @@ def main():
         "--workers", type=int, default=4,
         help=(
             "Anzahl Worker-Prozesse. Jeder laedt das Modell auf die GPU. "
-            "Bei 12 GB VRAM und unserem 1.25M-Modell sind 4-6 Worker sicher. "
-            "Default 4."
+            "Bei 12 GB VRAM und unserem 1.25M-Modell sind 4-8 Worker sicher. "
+            "Default 4 (Empfehlung 8 fuer RTX 3060)."
         ),
     )
     parser.add_argument(
         "--parallel-threads-per-worker", type=int, default=8,
         help=(
-            "Wieviele Game-Threads pro Worker (innerhalb des Prozesses). "
-            "Default 8. Mit --workers 4 ergibt das insgesamt 32 parallel "
-            "laufende Spiele -- ohne GIL-Konflikt zwischen den Workern."
+            "Wieviele Game-Threads pro Worker (innerhalb eines Chunks). "
+            "Default 8 (Empfehlung 32 aus Throughput-Test)."
         ),
     )
     parser.add_argument(
@@ -170,6 +212,13 @@ def main():
         choices=["single-trick", "full-round-vec"],
         default="full-round-vec",
     )
+    parser.add_argument(
+        "--skip-existing", action="store_true",
+        help=(
+            "Wenn gesetzt: Chunks, deren Shard-Datei schon existiert, werden "
+            "uebersprungen. Praktisch zum Wiederaufnehmen nach Crash."
+        ),
+    )
     args = parser.parse_args()
 
     selected = ALL_VARIANTS
@@ -179,40 +228,47 @@ def main():
             print(f"WARNUNG: keine gueltigen Varianten in {args.variants}.")
             return
 
-    # Varianten auf Worker aufteilen (Round-Robin)
-    n_workers = min(args.workers, len(selected))
-    chunks: list[list[VariantSpec]] = [[] for _ in range(n_workers)]
-    for i, vs in enumerate(selected):
-        chunks[i % n_workers].append(vs)
+    tasks = _build_chunk_tasks(
+        selected=selected,
+        games_per_variant=args.games_per_variant,
+        games_per_chunk=args.games_per_chunk,
+        base_seed=args.seed,
+    )
+
+    n_workers = min(args.workers, len(tasks))
 
     print(
-        f"Multiprocessing-MCTS-Datengen:\n"
+        f"Multiprocessing-MCTS-Datengen (Chunk-Queue):\n"
         f"  - {n_workers} Worker-Prozesse\n"
         f"  - je {args.parallel_threads_per_worker} Game-Threads pro Worker\n"
-        f"  - {len(selected)} Varianten gesamt, aufgeteilt:\n"
+        f"  - {len(selected)} Varianten gesamt, {args.games_per_variant} Spiele pro Variante\n"
+        f"  - Chunk-Groesse: {args.games_per_chunk} Spiele\n"
+        f"  - Gesamt: {len(tasks)} Chunks in der Queue\n"
     )
-    for i, c in enumerate(chunks):
-        print(f"    Worker {i}: {[vs.label for vs in c]}")
 
-    # Spawn-Context: TF ist nicht fork-safe, deshalb fresh Python pro Worker.
     ctx = mp.get_context("spawn")
-    processes: list[mp.Process] = []
     t0 = time.perf_counter()
 
-    for i in range(n_workers):
-        if not chunks[i]:
-            continue
-        p = ctx.Process(
-            target=_worker_process,
-            args=(i, chunks[i], vars(args)),
-            name=f"MCTSWorker-{i}",
-        )
-        p.start()
-        processes.append(p)
+    with ctx.Manager() as manager:
+        task_queue = manager.Queue()
+        for task in tasks:
+            task_queue.put(task)
+        # Sentinels: ein None pro Worker, damit jeder weiss "Schluss".
+        for _ in range(n_workers):
+            task_queue.put(None)
 
-    # Auf alle Worker warten
-    for p in processes:
-        p.join()
+        processes: list[mp.Process] = []
+        for i in range(n_workers):
+            p = ctx.Process(
+                target=_worker_process,
+                args=(i, task_queue, vars(args)),
+                name=f"MCTSWorker-{i}",
+            )
+            p.start()
+            processes.append(p)
+
+        for p in processes:
+            p.join()
 
     elapsed = time.perf_counter() - t0
     print(f"\n=== Alle Worker fertig in {elapsed / 60:.1f} min ===")
