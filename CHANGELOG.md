@@ -6,17 +6,46 @@ Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Entwurf für v0.8.0 (Solo-Jass)
+
+Die folgenden Punkte beschreiben den Stand kurz vor dem Release. Konkrete
+Eval-Zahlen werden nach abgeschlossenem Training eingetragen.
+
 ### Hinzugefügt
 
-- (noch nichts)
+- **Neue Spielart Solo-Jass** ([`jass_engine/variants/solo_jass.py`](jass_engine/variants/solo_jass.py)):
+  - 4 Spieler, jeder gegen jeden
+  - Punkte pro Spieler statt pro Team
+  - Default-Spielziel 500 (mindestens 500, konfigurierbar)
+  - Schieben deaktiviert (`allow_push=False`)
+  - Matsch +100 für einen einzelnen Spieler, Stöcke +20 für den Halter persönlich
+  - Weisen: nur der höchste Weis-Halter erhält die Punkte (Gleichstand → zuerst angesagt)
+  - Engine-Implementierung via `teams=[0,1,2,3]` (jeder eigene Team-ID) — bestehende Punkteaggregation funktioniert dadurch automatisch korrekt
+- **`SoloHeuristicPlayer`** ([`players/solo_heuristic_player.py`](players/solo_heuristic_player.py)): erbt vom Team-HeuristicPlayer; der Schmier-Branch ist im Solo strukturell tot Code, weil `_is_partner_winning` bei `teams=[0,1,2,3]` immer `False` liefert. Konservativere Slalom-Parameter.
+- **Solo-MCTS-Datengen** ([`training/data/solo_vectorized_lookahead.py`](training/data/solo_vectorized_lookahead.py), [`training/data/generate_solo_mcts_data.py`](training/data/generate_solo_mcts_data.py), [`training/data/generate_solo_mcts_data_mp.py`](training/data/generate_solo_mcts_data_mp.py)):
+  - Solo-Reward: `(eigene Punkte - max(andere Punkte)) / 200`
+  - Variables Spielziel pro Trainings-Partie (Default 50/50 zwischen 500 und 1000)
+  - Lehrer-Init für Phase 1: SoloHeuristicPlayer; für Phase 2: das Solo-Phase-1-Modell
+- **Warm-Start in `training/train.py`**: neues `--warm-start MODEL_PATH`-Flag lädt Modell-Gewichte und kompiliert mit frischem Optimizer-State + konfigurierter Lernrate neu. Backwards-compatible.
+- **Solo-Eval-Pipeline** ([`evaluation/solo_eval.py`](evaluation/solo_eval.py), [`evaluation/run_solo_eval.py`](evaluation/run_solo_eval.py), [`evaluation/solo_stats.py`](evaluation/solo_stats.py)):
+  - `four_way_match(label_a, factory_a, label_b, factory_b, label_h, factory_h, ...)`: 1 Modell A vs 1 Modell B vs 2 SoloHeuristik
+  - Paired-Eval: 4 Partien pro Kartenverteilung mit zyklischer Sitz-Rotation; eliminiert Karten-Glück und Sitz-Vorteile vollständig (Smoke-Test mit 4 identischen Bots ergibt exakt 25.0 % Win-Rate pro Rolle)
+  - Win-Rate pro Variante, Avg-Score, Matsch-Rate pro Spieler-Rolle
+- **Modell-Karte v0.8.0** ([`docs/model_cards/v0.8.0.md`](docs/model_cards/v0.8.0.md)) und Web-App-Briefing ([`docs/web_app_update_v0.8.0.md`](docs/web_app_update_v0.8.0.md))
 
 ### Geändert
 
-- (noch nichts)
+- **Engine-Methoden `play_game()` und `play_round()`** akzeptieren jetzt einen Parameter `allow_push: bool = True`. Backwards-compatible — alle bestehenden Aufrufer nutzen den Default. Bei Solo wird `False` gesetzt, um Schieben strukturell zu unterbinden.
+- **MANIFEST.json** enthält jetzt zusätzlich das Feld `team_mode` (`"team"` oder `"solo"`), damit die Web-App das richtige Modell zur gewählten Spielart laden kann. Spec-Version bleibt unverändert bei 1.2.0 — Solo ist eine Spielmodus-Frage (Teams, Schieben, Target-Score), keine Variant-Regel-Frage.
 
-### Behoben
+### Spielstärke (Eval gegen SoloHeuristik)
 
-- (noch nichts)
+| Modell | Win-Rate gegen 3× SoloHeuristik | Avg. Score / Partie |
+|---|---|---|
+| Solo-Phase 1 | `<TBD>` | `<TBD>` |
+| **Solo-Phase 2 (v0.8.0)** | **`<TBD>`** | **`<TBD>`** |
+
+Random-Baseline: 25 % Win-Rate. Ziel für v0.8.0: ≥ 35 %.
 
 ## [0.7.0] - 2026-05-18 - MCTS-augmentiertes Behavioral Cloning, erstes Modell stärker als v0.5.0
 
