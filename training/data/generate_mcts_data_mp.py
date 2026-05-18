@@ -53,8 +53,17 @@ def _worker_process(
     und generiert die ihm zugeteilten Varianten.
     """
     import os
+    import sys
     # TF-Logs leiser
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+    # Unbuffered stdout/stderr -- damit Worker-print-Ausgaben sofort im
+    # Hauptterminal sichtbar werden statt im Pipe-Buffer zu haengen.
+    # `python -u` wirkt nur fuer den Hauptprozess; Worker brauchen das selbst.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
 
     import tensorflow as tf
     from tensorflow import keras
