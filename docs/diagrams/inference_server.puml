@@ -1,0 +1,65 @@
+@startuml inference_server
+' Inferenz-Server-Architektur: wie batched-gpu im Eval und in der
+' MCTS-Datengen viele parallele Spiele auf eine GPU buendelt.
+' Rendern: plantuml -tpng docs/diagrams/inference_server.puml
+
+title batched-gpu: Game-Threads, Inferenz-Server, GPU
+
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Helvetica"
+skinparam roundCorner 8
+skinparam shadowing false
+
+skinparam rectangle {
+  BackgroundColor<<thread>>   #DCE7F1
+  BackgroundColor<<server>>   #FFF2CC
+  BackgroundColor<<gpu>>      #FCE4D6
+  BackgroundColor<<queue>>    #E2EFDA
+  BorderColor #555555
+}
+
+rectangle "Hauptprozess (Python)" as host {
+
+  rectangle "**Game-Thread 1**\nspielt Partie A\nrequest(state, mask)" <<thread>> as t1
+  rectangle "**Game-Thread 2**\nspielt Partie B\nrequest(state, mask)" <<thread>> as t2
+  rectangle "**Game-Thread N**\n... bis ca. 128\nGame-Threads" <<thread>> as tn
+
+  rectangle "**Request-Queue**\nthreading.Queue\n* state-vec\n* mask-vec\n* Event (Antwort-Trigger)" <<queue>> as queue
+
+  rectangle "**InferenceServer-Thread**\n(training/rl/batched_selfplay.py)\n* sammelt bis zu max_batch_size\n  Requests aus der Queue\n* gibt waehrend wait den GIL frei\n* legt Antworten ans Event" <<server>> as server
+
+  rectangle "**Keras-Modell**\n(geladen im Speicher)\n* MaskBias registriert\n* model(x, mask) per Batch" <<server>> as model
+
+  rectangle "**GPU**\n(z.B. RTX 3060)\n* CUDA-Stream\n* Batch-Inferenz 32-1024" <<gpu>> as gpu
+}
+
+t1 --> queue : "put(req_1)"
+t2 --> queue : "put(req_2)"
+tn --> queue : "put(req_n)"
+
+queue --> server : "get() (bis Batch voll\n  oder Timeout)"
+server --> model : "tf.function-Call\n  (Batch von Vektoren)"
+model --> gpu : "CUDA-Kernel"
+gpu --> model : "Logits + Value (Batch)"
+model --> server : "ergebnis-Array"
+
+server --> t1 : "event.set(),\n  Antwort in req_1.response"
+server --> t2 : "event.set(),\n  Antwort in req_2.response"
+server --> tn : "event.set(),\n  Antwort in req_n.response"
+
+note right of server
+  Warum Threads statt Prozesse?
+  * choose_card-Aufrufe blockieren
+    im event.wait() -- GIL frei
+  * Andere Threads spielen weiter
+  * Kein TF-Modell-Reload pro Worker
+  * Ein einziger GPU-Kontext
+
+  Multiprocessing-Variante
+  (generate_mcts_data_mp.py)
+  laedt pro Worker eigenes Modell
+  auf GPU. Memory-Growth verhindert
+  VRAM-OOM bei 4-6 Workern.
+end note
+
+@enduml

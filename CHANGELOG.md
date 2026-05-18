@@ -18,6 +18,53 @@ Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 - (noch nichts)
 
+## [0.7.0] - 2026-05-18 - MCTS-augmentiertes Behavioral Cloning, erstes Modell stärker als v0.5.0
+
+### Hinzugefügt
+
+- **MCTS-augmentierte Datengen** ([`training/data/`](training/data/)):
+  - `generate_mcts_data.py`: pro Spielposition Monte-Carlo-Lookahead mit Determinisierung der unsichtbaren Karten und ~30 Rollouts pro legaler Karte. Die Karte mit dem höchsten erwarteten Rundenende-Score wird als Lehrer-Aktion gespeichert.
+  - `vectorized_lookahead.py`: vektorisierte Full-Round-Variante — alle Rollouts werden im Lockstep getickt und in einem einzigen Batch durch den InferenceServer geschickt. Faktor 10-20 schneller als Einzel-Inferenz.
+  - `generate_mcts_data_mp.py`: Multiprocessing-Variante mit eigenem GPU-Modell pro Worker. Memory-Growth erlaubt 4-6 Worker auf einer 12-GB-GPU, umgeht den Python-GIL bei der Spiellogik.
+- **Eval-Modus `batched-gpu`** ([`evaluation/batched_eval.py`](evaluation/batched_eval.py)): mehrere parallele Spiele in einem Prozess, ein InferenceServer pro NN-Team, Batch-Inferenz auf der GPU. 5-10x schneller als der CPU-Worker-Modus bei 2000 Eval-Partien.
+- **Paired Evaluation** (`--paired-eval`): pro Paar zwei Spiele mit identischer Kartenverteilung — einmal Modell A auf Sitzen 0+2, einmal auf 1+3. Eliminiert Karten-Glück als Rauschquelle. Sanity-Test: zwei identische HeuristicPlayer geben Diff = 0.00 Punkte (vs. 14 Punkte Rauschen ohne paired-eval).
+- **Glossar** ([`docs/glossar.md`](docs/glossar.md)): >100 Einträge in deutschem Klartext zu Jass-Begriffen, ML-Grundlagen, Trainings-Methoden, Bewertung, Hardware, Python-Parallelverarbeitung.
+- **Modell-Karte** ([`docs/model_cards/v0.7.0.md`](docs/model_cards/v0.7.0.md)) und Web-App-Briefing ([`docs/web_app_update_v0.7.0.md`](docs/web_app_update_v0.7.0.md)).
+- **Architektur-Diagramme** als PlantUML ([`docs/diagrams/`](docs/diagrams/)).
+
+### Geändert
+
+- **Spec auf 1.2.0** (additiv): neue Blöcke `scoring.score_composition`, `round_flow.play_order_anchor`, Trick-Card-Ordering. Keine breaking changes — Encoding-Version bleibt 3.0.0.
+
+### Spielstärke (Eval gegen v0.5.0)
+
+| Metrik | v0.7.0 | v0.5.0 |
+|---|---|---|
+| Win-Rate (4000 Paare, paired-eval) | **77.2 %** | 22.7 % |
+| Avg. Score / Partie | 1025.2 | 829.3 |
+| Matsch-Rate / Runde | 4.78 % | 1.59 % |
+| Stärkste Variante | Slalom Unten (66.3 %) | — |
+| Schwächste Variante | Gumpf Schelle (54.0 %) | — |
+
+Erstes Modell, das v5 klar schlägt — die Reinforcement-Learning-Versuche (v6, v7) blieben unter dem v5-Niveau (siehe gestrichene Roadmap-Punkte).
+
+## [0.6.0] - 2026-05-16 - TF.js-Workflow live, Heuristik-Feinschliff
+
+### Hinzugefügt
+
+- **GitHub-Actions-Workflow `add_tfjs.yml`**: läuft automatisch nach jedem `release:published`-Event. Konvertiert das Keras-Modell aus dem ZIP-Asset auf einem Ubuntu-Runner zu TF.js und ersetzt das Asset mit `--clobber`. Damit ist die TF.js-Konvertierung vom lokalen Setup entkoppelt — auf Windows/WSL2 mit aktuellem Python ist `tensorflowjs` eine Dependency-Hölle, auf dem Linux-Runner mit Python 3.12 läuft sie zuverlässig.
+- **Defensive Stubs** in [`scripts/add_tfjs_to_release.py`](scripts/add_tfjs_to_release.py) für `tensorflow_decision_forests`, `yggdrasil_decision_forests` und `tensorflow_hub`: tensorflowjs zieht sie als Transit-Dependencies, hat aber Protobuf-Versionskonflikte mit aktuellem TF. Für die MLP-Konvertierung werden sie nicht gebraucht, daher per ModuleType-Trick stillschweigend gemockt.
+- **HeuristicPlayer**: zweistufige Gumpf-Bewertung. Erster Pass schätzt Wert konservativ, zweiter Pass bestätigt nur, wenn keine bessere Trumpf-Ansage existiert. Reduziert Fehl-Ansagen.
+- **`allowed_modes` und `allow_slalom`-Parameter** in HeuristicPlayer-Ansage-Logik: ermöglicht in Tests gezielt nur bestimmte Varianten zu spielen.
+
+### Geändert
+
+- **Zeilenenden** im Repo via `.gitattributes` auf LF normalisiert. Beseitigt CRLF-Diffs beim Wechsel zwischen WSL2 und Windows.
+
+### Behoben
+
+- TF.js-Konvertierung im Workflow lief vorher nicht durch (Protobuf-Konflikt, fehlende `pkg_resources` in Python 3.12, MaskBias-Custom-Layer wurde vom CLI-Konverter nicht erkannt). Jetzt komplett gefixt: Python-API statt CLI-Subprocess, Custom-Layer-Import vor dem Modell-Load, `setuptools` explizit installiert.
+
 ## [0.5.0] - Encoder v3, Gumpf-Variante, Geiss-Schwäche behoben
 
 ### Breaking Changes

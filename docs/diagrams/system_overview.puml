@@ -1,0 +1,73 @@
+@startuml system_overview
+' Gesamt-Architektur: vom Code im NN-Repo bis zur Web-App im Browser.
+' Rendern: plantuml -tpng docs/diagrams/system_overview.puml
+
+title Jass-NN -- Gesamt-Architektur
+
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Helvetica"
+skinparam roundCorner 8
+skinparam shadowing false
+
+skinparam rectangle {
+  BackgroundColor<<engine>>     #DCE7F1
+  BackgroundColor<<player>>     #E2EFDA
+  BackgroundColor<<training>>   #FFF2CC
+  BackgroundColor<<release>>    #FCE4D6
+  BackgroundColor<<external>>   #EDEDED
+  BorderColor #555555
+}
+
+rectangle "**Spiel-Engine**\n(jass_engine/)\n* 36 Karten, 12 Varianten\n* Regeln, Stiche, Weisen\n* Schieben, Matsch" <<engine>> as engine
+
+rectangle "RandomPlayer" <<player>> as random
+rectangle "**HeuristicPlayer**\n* Schmieren, Sparen, Stechen\n* Trumpf-Ansage" <<player>> as heuristic
+rectangle "NNPlayer\n* laedt .keras\n* greedy choose_card" <<player>> as nn
+
+rectangle "**MCTS-augmentierte\nDatengen**\n(training/data/)\n* generate_mcts_data_mp.py\n* Multiprocessing + GPU-Sharing\n* ~2.4M Samples" <<training>> as datagen
+rectangle "**Behavioral-Cloning-\nTraining**\n(training/train.py)\n* MLP 768/768/384\n* Adam, Shard-Streaming" <<training>> as train
+rectangle "**Eval**\n(evaluation/run_eval.py)\n* sequential / cpu-workers /\n  batched-gpu\n* paired-eval optional\n* Elo + Win-Rate-Stats" <<training>> as eval
+
+rectangle "**make_release.py**\n* Tests + Spec-Drift\n* ZIP-Bau mit MANIFEST\n* gh release create" <<release>> as makerelease
+rectangle "**GitHub-Actions:\nadd_tfjs.yml**\n* Ubuntu-Runner\n* tensorflowjs-Konversion\n* ZIP-Asset --clobber" <<release>> as actions
+rectangle "**GitHub-Release**\n* Tag v0.x.0\n* ZIP-Asset mit\n  Keras + TF.js + Spec" <<release>> as release
+
+rectangle "**Web-App** (separates Repo)\n* NestJS + Frontend\n* TF.js-Inferenz im Browser\n* Lebende Multiplayer-Plattform" <<external>> as webapp
+
+engine --> random
+engine --> heuristic
+engine --> nn
+
+heuristic --> datagen : "Lehrer-Init\n(Phase 1)"
+nn --> datagen : "Lehrer-Init\n(Phase 2)"
+datagen --> train : "Shards (.npz)"
+train --> nn : "models/v0.7.0/best.keras"
+
+nn --> eval
+heuristic --> eval
+
+train --> makerelease : "best.keras"
+makerelease --> release : "ZIP ohne TF.js +\nrelease-notes.md"
+release --> actions : "release:published"
+actions --> release : "ZIP mit TF.js\n(--clobber)"
+
+release --> webapp : "gh release download"
+
+note right of datagen
+  Pro Spielposition:
+  * Determinisierung der
+    unsichtbaren Karten
+  * 30 Rollouts pro legaler Karte
+  * Karte mit hoechstem
+    Mittel-Score = Lehrer-Aktion
+end note
+
+note right of actions
+  TF.js-Konversion laeuft auf
+  Ubuntu, weil tensorflowjs auf
+  Windows/Python 3.13 nicht sauber
+  installiert. Linux-Runner kann
+  Python 3.12 + tensorflowjs >=4.22.
+end note
+
+@enduml

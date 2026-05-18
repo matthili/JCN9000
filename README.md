@@ -2,9 +2,11 @@
 
 **Vorarlberger Kreuz-Jass** als regelgetreue Python-Engine plus neuronales Netz als KI-Gegner. Erzeugt versionierte Artefakte (Modell + Regel-Spezifikation), die in einer separaten Web-Anwendung als Multiplayer-Plattform eingebunden werden können.
 
-[![Tests](https://img.shields.io/badge/tests-126%20passing-brightgreen)](#verifikation)
+[![Tests](https://img.shields.io/badge/tests-142%20passing-brightgreen)](#verifikation)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](#voraussetzungen)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+**Aktuelles Modell: [v0.7.0](docs/model_cards/v0.7.0.md)** — MCTS-augmentiertes Behavioral Cloning, 77.2 % Win-Rate gegen v0.5.0 in 4000 gepaarten Partien.
 
 ## Inhaltsverzeichnis
 
@@ -28,8 +30,8 @@
 | **NN-Player** ([`players/nn_player.py`](players/nn_player.py)) | Lädt ein trainiertes Modell und spielt damit |
 | **Eval** ([`evaluation/`](evaluation/)) | Sequenziell mit Elo, oder parallel über N CPU-Worker (`--workers 16` → 2000 Partien in ~19 min) |
 | **Visualisierung** ([`visualization/`](visualization/)) | Rich-basierte Terminal-Demo und Streamlit-App zur interaktiven Regel-Verifikation |
-| **Regel-Spezifikation** ([`spec/`](spec/)) | Versionierte JSON-Spec (1.1.0) + Encoder-Doku (3.0.0) + Test-Fixtures als Schnittstelle für die Web-Anwendung |
-| **Test-Suite** ([`tests/`](tests/)) | 126 Tests: Regeln (inkl. Gumpf), Weisen, Heuristik, Encoder, Spec-Konsistenz |
+| **Regel-Spezifikation** ([`spec/`](spec/)) | Versionierte JSON-Spec (1.2.0) + Encoder-Doku (3.0.0) + Test-Fixtures als Schnittstelle für die Web-Anwendung |
+| **Test-Suite** ([`tests/`](tests/)) | 142 Tests: Regeln (inkl. Gumpf), Weisen, Heuristik, Encoder, RL-Stack, Spec-Konsistenz |
 
 ## Voraussetzungen
 
@@ -105,17 +107,26 @@ Die Engine ist über Tests abgesichert. Bei jeder Code-Änderung:
 pytest
 ```
 
-Aktuell **103 Tests grün**, verteilt auf:
+Aktuell **142 Tests grün**, verteilt auf:
 
 - `test_card.py` — Karten, Deck, Weli-Identifikation
-- `test_rules.py` — Werte, Reihenfolgen, legale Züge je Variante (Trumpf, Bock, Geiss)
+- `test_rules.py` — Werte, Reihenfolgen, legale Züge je Variante (Trumpf, Gumpf, Oben/Unten, Slalom)
 - `test_weis.py` — Sequenzen, Vierlinge, Stöcke, Team-Vergleich
 - `test_heuristic_player.py` — Schmier-/Spar-/Stech-Verhalten, Ansage-Logik, Slalom
 - `test_kreuz_jass.py` — End-to-End-Spielablauf, Konsistenz, Matsch
-- `test_encoder.py` — 132-dim Featurevektor, legale Aktionsmaske
+- `test_encoder.py` — 421-dim Featurevektor, legale Aktionsmaske
+- `test_evaluation.py` — Elo, paired-eval, Stats-Aggregation
+- `test_model_value_head.py` — Value-Head-Roundtrip
+- `test_rl.py` — Reinforcement-Learning-Stack
 - `test_spec_consistency.py` — Spec-Drift gegen Python-Konstanten, Fixture-Reproduzierbarkeit
 
 ## Architektur
+
+Hochauflösende Diagramme als PlantUML in [`docs/diagrams/`](docs/diagrams/):
+- [`system_overview.puml`](docs/diagrams/system_overview.puml) — Gesamt-Architektur vom Code bis zur Web-App im Browser
+- [`inference_server.puml`](docs/diagrams/inference_server.puml) — wie der `batched-gpu`-Modus mehrere parallele Spiele auf eine GPU bündelt
+
+Schnellüberblick als ASCII:
 
 ```
                 ┌────────────────────────────────────┐
@@ -174,7 +185,7 @@ Die Web-Anwendung ist ein **separates Projekt**. Dieses Repository liefert ihr d
 |---|---|---|
 | **Regel-Spezifikation** | [`spec/jass_rules.json`](spec/jass_rules.json) | Alle Spielregeln deklarativ in JSON |
 | **JSON-Schema** | [`spec/jass_rules.schema.json`](spec/jass_rules.schema.json) | Validiert die Spec-Datei beim Lesen |
-| **Encoder-Doku** | [`spec/state_encoding.md`](spec/state_encoding.md) | 132-dim Featurevektor-Layout für das NN |
+| **Encoder-Doku** | [`spec/state_encoding.md`](spec/state_encoding.md) | 421-dim Featurevektor-Layout für das NN |
 | **Test-Fixtures** | [`spec/fixtures/encoding_fixtures.json`](spec/fixtures/encoding_fixtures.json) | (State → Vektor)-Paare zum Verifizieren des TS-Ports |
 | **Trainiertes Modell** | (nicht im Repo) | TF.js-Modell, als GitHub-Release-Asset |
 
@@ -197,26 +208,30 @@ Ein "Release" ist im GitHub-Sinne eine **versionierte, eingefrorene Veröffentli
 
 - **GitHub-CLI** installieren: <https://cli.github.com/>
 - Einmal anmelden: `gh auth login`
-- TensorFlow.js-Konverter installieren: `pip install tensorflowjs`
+- **TF.js-Konvertierung läuft auf GitHub-Actions**, nicht lokal — siehe [`add_tfjs.yml`](.github/workflows/add_tfjs.yml). Auf Windows/WSL2 mit modernem Python ist die lokale Installation von `tensorflowjs` eine Dependency-Hölle, deshalb wurde sie bewusst auf einen Ubuntu-Runner ausgelagert.
 
 ### Release in einem Befehl
 
-Lokal ein Modell trainieren (mit voller Hardware-Power, beliebig groß), dann:
+Lokal ein Modell trainieren, dann:
 
-```powershell
-python -m scripts.make_release --version v0.1.0
+```bash
+# WSL2 — empfohlen, weil das Skript Spec-Regen ausführt und in WSL2-Pfaden auch
+# in Windows-Pfaden konsistente Zeilenenden produziert
+python -m scripts.make_release --version v0.1.0 --model models/v1/best.keras --tfjs-dir models/v1/tfjs
 ```
 
-Das Skript läuft folgende Schritte ab und fragt vor dem Pushen ausdrücklich nach Bestätigung:
+Das Skript:
 
 1. **Vorprüfung**: working tree sauber, richtiger Branch (`master`), Tag noch frei, `gh` angemeldet
-2. **Tests laufen lassen** (gegen das Repo)
+2. **Tests laufen lassen**
 3. **Spec-Drift prüfen**: `spec/`-Dateien werden neu generiert und müssen unverändert sein
-4. **TF.js-Export**: `models/v1/best.keras` → `models/v1/tfjs/` (falls noch nicht geschehen)
+4. **TF.js-Export versuchen** (lokal): meist nicht installiert — Skript bricht nicht ab, sondern lädt das ZIP ohne TF.js hoch und überlässt das dem Workflow
 5. **ZIP bauen** mit allen Artefakten + MANIFEST.json (SHA256-Hashes)
 6. **Bestätigung abwarten** — bis hierhin wurde nichts an GitHub gesendet
 7. **Git-Tag erstellen und pushen**
 8. **GitHub-Release erstellen** und ZIP als Anhang anhängen
+
+Nach Schritt 8 läuft automatisch der Workflow `add_tfjs.yml`: er lädt das ZIP herunter, konvertiert das Keras-Modell auf einem Ubuntu-Runner nach TF.js, hängt das `tfjs/`-Verzeichnis dran und ersetzt das Asset (`--clobber`). Dauert 3-5 Minuten.
 
 ### Trockenlauf (zum Testen)
 
@@ -263,11 +278,14 @@ Damit hat die Web-App **eine einzige, versionierte Quelle** für Spielregeln und
 - [x] Spielengine mit allen Varianten
 - [x] Heuristik-Bot mit Schmieren/Sparen/Stechen
 - [x] Trainings-Pipeline (Encoder, Datengenerator, MLP, Trainings-Loop)
-- [x] NN-Player auf Augenhöhe mit Heuristik (Behavioral Cloning)
+- [x] NN-Player auf Augenhöhe mit Heuristik (Behavioral Cloning, v0.5.0)
 - [x] Schnittstellen-Spec für separate Web-App
-- [x] TF.js-Export + lokaler Release-Befehl (`scripts/make_release.py`)
-- [ ] Größeres Modell trainieren (mehr Daten, ggf. mit GPU via WSL2)
-- [ ] Reinforcement Learning (Self-Play) für stärkeren Bot
+- [x] TF.js-Export via GitHub-Actions (`add_tfjs.yml`)
+- [x] Reinforcement Learning (Self-Play) — Versuch abgeschlossen, PPO auf BC-Plateau bringt unter unseren Bedingungen keine stärkere Politik. Lehre: AlphaZero-Stil mit MCTS bei Inferenz wäre der nächste Versuch.
+- [x] **MCTS-augmentiertes Behavioral Cloning** (v0.7.0) — 77.2 % Win-Rate gegen v0.5.0
+- [ ] Mensch-vs-Modell-Validierung (20-30 Partien gegen erfahrene Vorarlberger Jasser)
+- [ ] MCTS-Phase 3 mit v0.7.0 als Lehrer-Init für nächsten Sprung
+- [ ] Echter MCTS-bei-Inferenz (AlphaZero-Architektur, kostet Latenz)
 - [ ] Steigern-Variante (Bieter-Jass)
 - [ ] Bodensee-Jass (2 Spieler) und 6-Spieler-Kreuz-Jass
 
