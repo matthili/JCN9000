@@ -45,12 +45,17 @@ def play_round(
     round_idx: int,
     rng=None,
     forced_announcer_idx: int | None = None,
+    allow_push: bool = True,
 ) -> RoundResult:
     """Spielt eine vollständige Runde.
 
     In Runde 1 sagt der Weli-Halter an (außer `forced_announcer_idx` ist gesetzt).
     Ab Runde 2 darf der Ansager schieben — der Geschobene wählt dann die Ansage,
     aber der ursprüngliche Ansager spielt trotzdem als erster aus.
+
+    Args:
+        allow_push: erlaubt Schieben (Default True). Bei Solo-Jass wird das auf
+            False gesetzt, weil es keinen Partner gibt, zu dem man schieben könnte.
     """
     num_players = len(players)
     if num_players != 4:
@@ -65,7 +70,7 @@ def play_round(
     else:
         announcer_idx = round_idx % num_players
 
-    can_push = round_idx > 0
+    can_push = allow_push and round_idx > 0
     announcement = players[announcer_idx].choose_announcement(
         hands[announcer_idx], round_idx, can_push
     )

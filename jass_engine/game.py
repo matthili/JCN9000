@@ -26,11 +26,17 @@ def play_game(
     target_score: int = DEFAULT_TARGET_SCORE,
     rng: random.Random | None = None,
     max_rounds: int = 200,
+    allow_push: bool = True,
 ) -> GameResult:
     """Spielt eine vollständige Partie bis zum Zielpunkte-Limit.
 
     Standardmäßig sitzen die Spieler 0+2 als Team 0, Spieler 1+3 als Team 1
-    (Partner über Kreuz).
+    (Partner über Kreuz). Bei Solo-Jass werden vier separate "Teams" verwendet
+    (jeder Spieler eigenes Team), und `allow_push=False` deaktiviert das
+    Schieben (es gibt keinen Partner).
+
+    Args:
+        allow_push: erlaubt Schieben (Default True). Auf False setzen für Solo.
     """
     if rng is None:
         rng = random.Random()
@@ -55,6 +61,7 @@ def play_game(
             round_idx=round_idx,
             rng=rng,
             forced_announcer_idx=forced_announcer,
+            allow_push=allow_push,
         )
         rounds.append(result)
         last_announcer = result.announcer_idx
