@@ -24,10 +24,21 @@ java -jar plantuml.jar -tpng docs\diagrams\*.puml
 
 ## Inhalt
 
-| Datei | Was es zeigt |
-|---|---|
-| `system_overview.puml` | Gesamt-Architektur vom Code im NN-Repo bis zur Web-App im Browser. Engine, Spieler-Typen, Datengen, Training, Eval, Release-Pipeline. |
-| `inference_server.puml` | Wie der `batched-gpu`-Modus (im Eval und in der MCTS-Datengen) viele parallele Spiele auf eine GPU buendelt. Game-Threads, Queue, Inferenz-Server. |
+### System-Architektur
+
+Gesamt-Architektur vom Code im NN-Repo bis zur Web-App im Browser. Engine, Spieler-Typen, Datengen, Training, Eval, Release-Pipeline.
+
+Quelle: [`system_overview.puml`](system_overview.puml)
+
+![System-Architektur](system_overview.png)
+
+### Inferenz-Server (batched-gpu)
+
+Wie der `batched-gpu`-Modus (im Eval und in der MCTS-Datengen) viele parallele Spiele auf eine GPU buendelt. Game-Threads, Queue, Inferenz-Server.
+
+Quelle: [`inference_server.puml`](inference_server.puml)
+
+![Inferenz-Server](inference_server.png)
 
 ## Wann ein neues Diagramm dazukommt
 

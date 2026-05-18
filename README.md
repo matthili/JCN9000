@@ -122,11 +122,11 @@ Aktuell **142 Tests grün**, verteilt auf:
 
 ## Architektur
 
-Hochauflösende Diagramme als PlantUML in [`docs/diagrams/`](docs/diagrams/):
-- [`system_overview.puml`](docs/diagrams/system_overview.puml) — Gesamt-Architektur vom Code bis zur Web-App im Browser
-- [`inference_server.puml`](docs/diagrams/inference_server.puml) — wie der `batched-gpu`-Modus mehrere parallele Spiele auf eine GPU bündelt
+![System-Architektur](docs/diagrams/system_overview.png)
 
-Schnellüberblick als ASCII:
+Die Quell-Datei für das Diagramm liegt unter [`docs/diagrams/system_overview.puml`](docs/diagrams/system_overview.puml). Ein weiteres Diagramm zur Inferenz-Server-Architektur des `batched-gpu`-Modus findet sich in [`docs/diagrams/inference_server.puml`](docs/diagrams/inference_server.puml) bzw. dem [Diagramm-Übersichts-Dokument](docs/diagrams/README.md).
+
+Schnellüberblick zusätzlich als ASCII:
 
 ```
                 ┌────────────────────────────────────┐
