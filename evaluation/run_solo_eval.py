@@ -100,6 +100,25 @@ def main():
             "Eliminiert Karten-Glueck und Sitz-Vorteile als Rauschquelle."
         ),
     )
+    parser.add_argument(
+        "--inference-mode",
+        choices=["sequential", "batched-gpu"],
+        default="sequential",
+        help=(
+            "sequential   = klassisch, ein Spiel nach dem anderen mit "
+            "model(x)-Inferenz pro Karte (Default).\n"
+            "batched-gpu  = viele Game-Threads + GPU-Inferenz-Server mit "
+            "Batch-Inferenz. Empfohlen fuer >= 1000 Spiele."
+        ),
+    )
+    parser.add_argument(
+        "--inference-batch-size", type=int, default=64,
+        help="Nur fuer batched-gpu: max. Server-Batch-Groesse.",
+    )
+    parser.add_argument(
+        "--parallel-threads", type=int, default=64,
+        help="Nur fuer batched-gpu: max. gleichzeitig spielende Game-Threads.",
+    )
     args = parser.parse_args()
 
     # Bei paired-eval --games durch 4 teilbar?
@@ -107,10 +126,6 @@ def main():
         sys.exit(
             f"--paired-eval verlangt --games als Vielfaches von 4 (uebergeben: {args.games})."
         )
-
-    factory_a = _make_factory(args.a, args.model_a)
-    factory_b = _make_factory(args.b, args.model_b)
-    factory_h = _factory_solo_heuristic
 
     def _label(kind: str, model_path: Path | None, suffix: str) -> str:
         if kind == "nn" and model_path is not None:
@@ -122,24 +137,51 @@ def main():
     label_h = "SoloHeuristic"
 
     paired_str = ", paired-eval" if args.paired_eval else ""
+    mode_str = (
+        f", batched-gpu (batch <= {args.inference_batch_size}, "
+        f"threads = {args.parallel_threads})"
+        if args.inference_mode == "batched-gpu"
+        else ""
+    )
     print(
         f"Solo-Tournament: {label_a} vs. {label_b}  "
-        f"(+ 2x {label_h}, {args.games} Partien{paired_str})"
+        f"(+ 2x {label_h}, {args.games} Partien{paired_str}{mode_str})"
     )
 
     start = time.perf_counter()
-    result = four_way_match(
-        label_a=label_a,
-        factory_a=factory_a,
-        label_b=label_b,
-        factory_b=factory_b,
-        label_h=label_h,
-        factory_h=factory_h,
-        num_games=args.games,
-        target_score=args.target,
-        seed=args.seed,
-        paired_eval=args.paired_eval,
-    )
+    if args.inference_mode == "batched-gpu":
+        from evaluation.batched_solo_eval import four_way_match_batched_gpu
+        result = four_way_match_batched_gpu(
+            label_a=label_a,
+            kind_a=args.a,
+            model_a=args.model_a,
+            label_b=label_b,
+            kind_b=args.b,
+            model_b=args.model_b,
+            label_h=label_h,
+            num_games=args.games,
+            target_score=args.target,
+            seed=args.seed,
+            paired_eval=args.paired_eval,
+            inference_batch_size=args.inference_batch_size,
+            parallel_threads=args.parallel_threads,
+        )
+    else:
+        factory_a = _make_factory(args.a, args.model_a)
+        factory_b = _make_factory(args.b, args.model_b)
+        factory_h = _factory_solo_heuristic
+        result = four_way_match(
+            label_a=label_a,
+            factory_a=factory_a,
+            label_b=label_b,
+            factory_b=factory_b,
+            label_h=label_h,
+            factory_h=factory_h,
+            num_games=args.games,
+            target_score=args.target,
+            seed=args.seed,
+            paired_eval=args.paired_eval,
+        )
     elapsed = time.perf_counter() - start
 
     print()

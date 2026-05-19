@@ -140,8 +140,15 @@ Punkte-Aggregation pro Spieler statt pro Team.
 
 | Eval-Setup | Win-Rate v0.8.0 |
 |---|---|
-| vs. 3x SoloHeuristik | **`<TBD>` %** (Ziel: >= 35 %, Random-Baseline 25 %) |
-| vs. Solo-Phase-1-Modell + 2x SoloHeuristik | `<TBD>` % |
+| vs. Solo-Phase-1 + 2x SoloHeuristik (3400 paired-Partien) | **45.4 %** |
+| Phase-1-Modell im selben Eval | 21.1 % |
+| SoloHeuristik | 16.8 % |
+
+Random-Baseline waere 25 % pro Rolle. v0.8.0 liegt 20 Prozentpunkte darueber.
+Eval-Ziel war >= 35 %, erreicht mit 10 Punkten Puffer.
+
+Avg-Score pro Partie: 462.3 (v0.8.0) vs. 392.0 (Phase 1) vs. 381.1 (Heuristik).
+Matsch-Rate pro Runde: v0.8.0 macht **16x oefter Matsch** als die Heuristik.
 
 Avg. Score pro Partie, Matsch-Rate pro Runde -- alle Detail-Zahlen kommen
 nach abgeschlossenem Training. Die Modell-Karte (`docs/model_cards/v0.8.0.md`)

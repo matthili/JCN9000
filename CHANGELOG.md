@@ -38,14 +38,17 @@ Eval-Zahlen werden nach abgeschlossenem Training eingetragen.
 - **Engine-Methoden `play_game()` und `play_round()`** akzeptieren jetzt einen Parameter `allow_push: bool = True`. Backwards-compatible — alle bestehenden Aufrufer nutzen den Default. Bei Solo wird `False` gesetzt, um Schieben strukturell zu unterbinden.
 - **MANIFEST.json** enthält jetzt zusätzlich das Feld `team_mode` (`"team"` oder `"solo"`), damit die Web-App das richtige Modell zur gewählten Spielart laden kann. Spec-Version bleibt unverändert bei 1.2.0 — Solo ist eine Spielmodus-Frage (Teams, Schieben, Target-Score), keine Variant-Regel-Frage.
 
-### Spielstärke (Eval gegen SoloHeuristik)
+### Spielstärke (Eval mit paired-eval, 3400 Partien)
 
-| Modell | Win-Rate gegen 3× SoloHeuristik | Avg. Score / Partie |
-|---|---|---|
-| Solo-Phase 1 | `<TBD>` | `<TBD>` |
-| **Solo-Phase 2 (v0.8.0)** | **`<TBD>`** | **`<TBD>`** |
+| Rolle | Win-Rate | Avg. Score / Partie | Matsch-Rate / Runde |
+|---|---|---|---|
+| **NN(solo_phase2) / v0.8.0** | **45.4 %** | **462.3** | **0.16 %** |
+| NN(solo_phase1) | 21.1 % | 392.0 | 0.01 % |
+| SoloHeuristik (zwei Sitze) | 16.8 % | 381.1 | 0.04 % |
 
-Random-Baseline: 25 % Win-Rate. Ziel für v0.8.0: ≥ 35 %.
+Random-Baseline wäre 25 % pro Rolle. v0.8.0 liegt 20 Prozentpunkte darüber. Ziel ≥ 35 % wurde mit 10 Punkten Puffer erreicht. Die statistische Standardabweichung der Win-Rate bei 3400 Partien beträgt ca. 0.74 %, d.h. der Abstand zur Random-Baseline entspricht ca. 28 Standardabweichungen.
+
+Pro Variante: alle gespielten Varianten zwischen 37.7 % (Gumpf-Schelle, schwächste) und 47.6 % (Unten, stärkste). Slalom-Varianten kamen in der Eval-Stichprobe nicht vor (Heuristik wählt sie nicht im Solo-Modus).
 
 ## [0.7.0] - 2026-05-18 - MCTS-augmentiertes Behavioral Cloning, erstes Modell stärker als v0.5.0
 

@@ -49,17 +49,23 @@ class NNPlayer(Player):
     def choose_card(self, hand: list[Card], state: GameState) -> Card:
         x = encode_state(hand, state)[np.newaxis, :].astype(np.float32)
         mask = legal_action_mask(hand, state)[np.newaxis, :].astype(np.float32)
-        prediction = self.model.predict({"state": x, "mask": mask}, verbose=0)
+        # Wichtig: NICHT model.predict() (hat ~30ms Python-Overhead pro Call wegen
+        # interner Dataset-Konstruktion). Das __call__ ist direkter Tensor-Forward
+        # und 10-50x schneller fuer Single-Sample-Inferenz.
+        prediction = self.model({"state": x, "mask": mask}, training=False)
 
         # Multi-Output-Modell liefert dict mit "policy" und "value";
         # Legacy-Modell liefert direkt das Policy-Array.
+        # Wenn aus model(...) statt model.predict(...): Tensors statt numpy -> .numpy()
+        def _to_np(t):
+            return t.numpy() if hasattr(t, "numpy") else t
+
         if isinstance(prediction, dict):
-            probs = prediction["policy"][0]
+            probs = _to_np(prediction["policy"])[0]
         elif isinstance(prediction, (list, tuple)) and len(prediction) >= 1:
-            # Bei manchen Keras-Versionen kommen Multi-Outputs als Liste
-            probs = prediction[0][0]
+            probs = _to_np(prediction[0])[0]
         else:
-            probs = prediction[0]
+            probs = _to_np(prediction)[0]
 
         if self.greedy:
             chosen_idx = int(np.argmax(probs))
