@@ -82,6 +82,9 @@ mehreren Abschnitten auf, wenn er in unterschiedlichen Kontexten relevant ist.
 | **Rollout** | – | Ein einzelner simulierter Spielverlauf, der für MCTS verwendet wird. |
 | **Determinization** | Determinisierung | Zufällige Verteilung der unsichtbaren Karten auf die Mitspieler — nötig, weil Jass ein Spiel mit unvollständiger Information ist. |
 | **AlphaZero-Stil** | – | Trainingsschema, das MCTS, Self-Play und Modell-Update iterativ kombiniert. Bekannt aus DeepMind-Projekten (Go, Schach). |
+| **Datengen** | Datengenerierung | Hausinterne Kurzform für „Trainingsdaten-Erzeugung": viele simulierte Partien werden durchgespielt; pro Spielposition entstehen Tupel `(Zustand, Aktionsmaske, Lehrer-Aktion, Belohnung)`. Diese landen als `.npz`-Shard-Dateien auf der Festplatte und sind die Eingabe für das spätere Modell-Training. **Kein gängiger Begriff**, sondern Projekt-Jargon — sollte für externe Kommunikation als „Datengenerierung" oder „Trainingsdaten-Erzeugung" ausgeschrieben werden. |
+| **Phase 1 / Phase 2 (Datengen)** | – | Mehrstufiges Datengen-Schema: Phase 1 erzeugt mit einem schwachen Lehrer (z.B. Heuristik) einen ersten Datensatz, das Modell wird trainiert. Phase 2 verwendet das Phase-1-Modell als Lehrer und erzeugt einen besseren Datensatz. Iterativ vergleichbar mit AlphaZero, aber ohne Suchbaum bei der Inferenz. |
+| **Shard** | – | Eine `.npz`-Datei mit z.B. 50-500 Spielen, in der pro Spielposition (Zustand, Maske, Aktion, Reward) gespeichert ist. Mehrere Shards pro Variante sind möglich (siehe Chunk-Queue). |
 
 ---
 
@@ -138,6 +141,12 @@ mehreren Abschnitten auf, wenn er in unterschiedlichen Kontexten relevant ist.
 | **Queue** | – | Warteschlange — Aufgaben kommen rein, Worker holen sie raus. |
 | **Spawn-Context** | – | Multiprocessing-Variante, bei der jeder Worker ein frischer Python-Interpreter ist (nötig für TensorFlow). |
 | **Fork-Context** | – | Multiprocessing-Variante, bei der der Worker eine Kopie des Hauptprozesses ist (geht nicht gut mit TensorFlow). |
+| **Chunk** | – | Häppchen einer großen Aufgabe. Bei uns: Teilmenge von Trainings-Partien einer Variante (z.B. 50 Spiele statt der vollen 500). |
+| **Chunk-Queue** | – | Warteschlange mit Chunks als Aufgaben. Mehrere Worker-Prozesse holen sich dynamisch das nächste freie Chunk ab — bessere Auslastung als wenn jeder Worker eine fest zugeteilte Menge bekommt. |
+| **Sentinel** | (auf Deutsch: „Wächter") | Spezielles Markierungs-Element in einer Queue, das den Workern „Schluss, keine Aufgaben mehr" signalisiert (typisch der Wert `None`). |
+| **MP-Skript** | Multiprocessing-Skript | Hausinterne Kurzform für ein Skript, das mehrere Prozesse parallel startet (Dateinamen enden auf `_mp.py`). |
+| **Smoke-Test** | – | Kurz-Test, der prüft, dass etwas grundsätzlich läuft (kein Crash, plausible Ausgaben), ohne tief in die Korrektheit zu gehen. Name kommt aus der Elektrotechnik: „rauchen die Bauteile?". |
+| **Warm-Start** | – | Ein Training nicht von zufälligen Gewichten aus starten, sondern von einem bereits trainierten Modell weiterführen. Schneller und stabiler, wenn das Vorgängermodell schon was kann. |
 
 ---
 
