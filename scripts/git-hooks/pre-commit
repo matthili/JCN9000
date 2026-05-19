@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Pre-Commit-Hook: rendert geaenderte .puml-Dateien automatisch zu .png und
+# nimmt die PNGs in den Commit auf. Verhindert, dass die im Repo abgelegten
+# PNGs gegenueber den PUML-Quellen veralten ("Drift").
+#
+# Installation einmalig nach `git clone`:
+#   git config core.hooksPath scripts/git-hooks
+#
+# Voraussetzungen:
+#   - java in PATH
+#   - plantuml.jar unter C:\Tools\PlantUML\plantuml.jar
+#     (sowohl WSL2-Pfad /mnt/c/... als auch Git-Bash-Pfad /c/... werden geprueft)
+#
+# Verhalten:
+#   - keine PUML im Commit -> Hook tut nichts
+#   - java oder plantuml.jar fehlt -> Warnung, Commit laeuft trotzdem durch
+#   - PUML-Syntaxfehler -> java exit-Code != 0, Commit wird abgebrochen
+#
+# Manuelle Auslosung zum Testen:
+#   ./scripts/git-hooks/pre-commit
+
+set -e
+
+# 1. Welche .puml-Dateien sind im Commit?
+staged_puml=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.puml$' || true)
+
+if [ -z "$staged_puml" ]; then
+    exit 0  # nichts zu rendern
+fi
+
+echo "[pre-commit] PUML-Dateien im Commit:"
+echo "$staged_puml" | sed 's/^/  /'
+
+# 2. java verfuegbar?
+if ! command -v java >/dev/null 2>&1; then
+    echo "[pre-commit] WARNUNG: java nicht gefunden -- PUML-Rendering uebersprungen."
+    echo "[pre-commit]          PNGs koennten veraltet sein. Manuell nachziehen!"
+    exit 0
+fi
+
+# 3. plantuml.jar finden (WSL2 oder Git-Bash auf Windows)
+if [ -f "/mnt/c/Tools/PlantUML/plantuml.jar" ]; then
+    PLANTUML_JAR="/mnt/c/Tools/PlantUML/plantuml.jar"
+elif [ -f "/c/Tools/PlantUML/plantuml.jar" ]; then
+    PLANTUML_JAR="/c/Tools/PlantUML/plantuml.jar"
+else
+    echo "[pre-commit] WARNUNG: plantuml.jar nicht gefunden -- PUML-Rendering uebersprungen."
+    echo "[pre-commit]          Erwartet unter C:\\Tools\\PlantUML\\plantuml.jar"
+    exit 0
+fi
+
+# 4. Rendern und PNGs ins Staging aufnehmen
+while IFS= read -r puml; do
+    if [ -z "$puml" ]; then continue; fi
+    echo "[pre-commit] rendere $puml"
+    java -DPLANTUML_LIMIT_SIZE=16384 -jar "$PLANTUML_JAR" -tpng "$puml"
+
+    png="${puml%.puml}.png"
+    if [ -f "$png" ]; then
+        git add "$png"
+        echo "[pre-commit]   -> $png ist mit im Commit"
+    else
+        echo "[pre-commit]   WARNUNG: $png wurde nicht erzeugt -- pruefe PUML-Syntax"
+    fi
+done <<< "$staged_puml"
+
+exit 0

@@ -130,3 +130,4 @@ credentials.json
 *.orig
 .cache/
 dist/
+plantuml.jar
