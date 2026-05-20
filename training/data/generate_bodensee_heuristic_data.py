@@ -12,20 +12,27 @@ Encoder-Dim 421 vs Bodensee 291). Dieses Skript liefert die "Phase 0"-Daten:
 Aus den Daten kann man dann ein erstes Bodensee-NN trainieren, das spaeter
 als Warm-Start fuer die MCTS-Phase 1 dient.
 
+Parallelisierung: echtes Multiprocessing. Dieser Schritt hat keine
+NN-Inferenz -- es ist reine Python-Spiellogik. Threading wuerde wegen des
+Python-GIL nichts bringen (alle Threads liefen auf einem Kern). Mit
+Multiprocessing laeuft jeder Worker in einem eigenen Interpreter und nutzt
+einen echten CPU-Kern.
+
 Aufruf:
     python -u -m training.data.generate_bodensee_heuristic_data \\
-        --games 5000 \\
+        --games 10000 \\
         --output data/bodensee_heuristic_bootstrap \\
         --target-distribution "500:0.5,1000:0.5" \\
-        --parallel-threads 32
+        --workers 12
 """
 
 from __future__ import annotations
 
 import argparse
+import multiprocessing as mp
 import random
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -219,8 +226,13 @@ def main():
     )
     parser.add_argument("--output", type=Path, default=Path("data/bodensee_heuristic_bootstrap"))
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--parallel-threads", type=int, default=32,
-                        help="Parallele Game-Threads (kein GIL-Konflikt weil keine NN-Inferenz).")
+    parser.add_argument(
+        "--workers", type=int, default=12,
+        help=(
+            "Anzahl paralleler Worker-Prozesse. Da keine NN-Inferenz noetig ist, "
+            "skaliert das praktisch linear mit den CPU-Kernen. Default 12."
+        ),
+    )
     args = parser.parse_args()
 
     target_distribution = _parse_target_distribution(args.target_distribution)
@@ -234,7 +246,7 @@ def main():
     print(
         f"Bodensee-Heuristik-Bootstrap-Datengen:\n"
         f"  - {args.games} Partien\n"
-        f"  - {args.parallel_threads} Threads\n"
+        f"  - {args.workers} Worker-Prozesse (echtes Multiprocessing, kein GIL-Limit)\n"
         f"  - {args.games_per_shard} Partien pro Shard -> {n_shards} Shards insgesamt\n"
         f"  - Output: {args.output}\n"
     )
@@ -242,49 +254,48 @@ def main():
     total_samples = 0
     total_size_bytes = 0
 
-    # Pro Shard parallel die zugehoerigen Spiele spielen, sammeln und schreiben
-    for shard_idx in range(n_shards):
-        shard_start = shard_idx * args.games_per_shard
-        shard_end = min(shard_start + args.games_per_shard, args.games)
-        shard_seeds = seeds[shard_start:shard_end]
+    # Spawn-Context: jeder Worker ein frischer Interpreter. Ohne TF-Abhaengigkeit
+    # waere auch fork moeglich, aber spawn ist plattformunabhaengig.
+    ctx = mp.get_context("spawn")
+    worker_fn = partial(_play_one_game, target_distribution=target_distribution)
 
-        shard_states: list[np.ndarray] = []
-        shard_masks: list[np.ndarray] = []
-        shard_actions: list[int] = []
-        shard_rewards: list[float] = []
+    # Pool einmal erzeugen und ueber alle Shards wiederverwenden.
+    with ctx.Pool(processes=args.workers) as pool:
+        for shard_idx in range(n_shards):
+            shard_start = shard_idx * args.games_per_shard
+            shard_end = min(shard_start + args.games_per_shard, args.games)
+            shard_seeds = seeds[shard_start:shard_end]
 
-        with ThreadPoolExecutor(
-            max_workers=args.parallel_threads,
-            thread_name_prefix=f"BodenseeHeuristic-S{shard_idx}",
-        ) as pool:
-            futures = [
-                pool.submit(_play_one_game, s, target_distribution)
-                for s in shard_seeds
-            ]
-            for fut in as_completed(futures):
-                states, masks, actions, rewards = fut.result()
+            shard_states: list[np.ndarray] = []
+            shard_masks: list[np.ndarray] = []
+            shard_actions: list[int] = []
+            shard_rewards: list[float] = []
+
+            for states, masks, actions, rewards in pool.imap_unordered(
+                worker_fn, shard_seeds
+            ):
                 shard_states.extend(states)
                 shard_masks.extend(masks)
                 shard_actions.extend(actions)
                 shard_rewards.extend(rewards)
 
-        if not shard_states:
-            continue
+            if not shard_states:
+                continue
 
-        out_path = _write_shard(
-            args.output, shard_idx,
-            shard_states, shard_masks, shard_actions, shard_rewards,
-        )
-        total_samples += len(shard_states)
-        total_size_bytes += out_path.stat().st_size
+            out_path = _write_shard(
+                args.output, shard_idx,
+                shard_states, shard_masks, shard_actions, shard_rewards,
+            )
+            total_samples += len(shard_states)
+            total_size_bytes += out_path.stat().st_size
 
-        elapsed = time.perf_counter() - start
-        rate = (shard_end / elapsed) if elapsed > 0 else 0
-        print(
-            f"  Shard {shard_idx + 1}/{n_shards} fertig ({len(shard_states):,} Samples, "
-            f"{out_path.stat().st_size / 2**20:.1f} MB) -- "
-            f"{shard_end}/{args.games} Partien gesamt ({rate:.1f} Partien/s)"
-        )
+            elapsed = time.perf_counter() - start
+            rate = (shard_end / elapsed) if elapsed > 0 else 0
+            print(
+                f"  Shard {shard_idx + 1}/{n_shards} fertig ({len(shard_states):,} Samples, "
+                f"{out_path.stat().st_size / 2**20:.1f} MB) -- "
+                f"{shard_end}/{args.games} Partien gesamt ({rate:.1f} Partien/s)"
+            )
 
     elapsed = time.perf_counter() - start
     print(

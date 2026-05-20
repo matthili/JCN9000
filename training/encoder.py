@@ -160,6 +160,42 @@ def _card_strength_feature(card: Card, variant: Variant, lead_suit: Suit | None)
     return 1 + base_rank_strength
 
 
+# Cache fuer die value_per_card-/strength_per_card-Sektionen.
+# Diese 2x36 Werte haengen NUR von (variant, lead_suit) ab -- nicht vom
+# Spieler, nicht von der Hand. In MCTS-Rollouts wird encode_state sehr oft mit
+# derselben Variante (und wenigen Lead-Suits) aufgerufen; ohne Cache werden
+# 72 card_value-/card_strength-Berechnungen pro Aufruf wiederholt.
+# Maximal 12 Varianten x 5 Lead-Suit-Zustaende = 60 Cache-Eintraege.
+_VALUE_STRENGTH_CACHE: dict[tuple, tuple[np.ndarray, np.ndarray]] = {}
+
+
+def _value_strength_arrays(
+    variant: Variant, lead_suit: Suit | None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Liefert (value_per_card, strength_per_card) als float32-Arrays (36,),
+    normalisiert. Cached ueber (variant, lead_suit).
+
+    Bit-identisch zur frueheren Inline-Berechnung: dieselben Formeln, dieselbe
+    float32-Quantisierung beim Array-Schreiben.
+    """
+    key = (variant, lead_suit)
+    cached = _VALUE_STRENGTH_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    val = np.zeros(NUM_CARDS, dtype=np.float32)
+    strg = np.zeros(NUM_CARDS, dtype=np.float32)
+    for suit in ALL_SUITS:
+        for rank in ALL_RANKS:
+            c = Card(suit, rank)
+            idx = card_index(c)
+            val[idx] = card_value(c, variant) / MAX_CARD_VALUE
+            strg[idx] = _card_strength_feature(c, variant, lead_suit) / MAX_CARD_STRENGTH
+    result = (val, strg)
+    _VALUE_STRENGTH_CACHE[key] = result
+    return result
+
+
 def encode_state(hand: list[Card], state: GameState) -> np.ndarray:
     """Wandelt Spielzustand in einen Featurevektor (float32, Shape (INPUT_DIM,)).
 
@@ -202,20 +238,15 @@ def encode_state(hand: list[Card], state: GameState) -> np.ndarray:
         off, _ = SECTION_OFFSETS[section]
         vec[off + card_index(c)] = 1.0
 
-    # 4) NEU v3: value_per_card und strength_per_card vorberechnen
+    # 4) NEU v3: value_per_card und strength_per_card (gecached ueber variant+lead)
     lead_suit: Suit | None = (
         state.current_trick_cards[0].suit if state.current_trick_cards else None
     )
     val_off, _ = SECTION_OFFSETS["value_per_card"]
     str_off, _ = SECTION_OFFSETS["strength_per_card"]
-    for suit in ALL_SUITS:
-        for rank in ALL_RANKS:
-            c = Card(suit, rank)
-            idx = card_index(c)
-            vec[val_off + idx] = card_value(c, state.variant) / MAX_CARD_VALUE
-            vec[str_off + idx] = (
-                _card_strength_feature(c, state.variant, lead_suit) / MAX_CARD_STRENGTH
-            )
+    val_arr, str_arr = _value_strength_arrays(state.variant, lead_suit)
+    vec[val_off:val_off + NUM_CARDS] = val_arr
+    vec[str_off:str_off + NUM_CARDS] = str_arr
 
     # 5) Lead-Suit
     if lead_suit is not None:

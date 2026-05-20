@@ -55,6 +55,7 @@ from training.encoder import (
     MAX_CARD_STRENGTH,
     MAX_CARD_VALUE,
     _card_strength_feature,
+    _value_strength_arrays,
     card_index,
     index_to_card,
 )
@@ -173,20 +174,15 @@ def encode_state_bodensee(
         off, _ = SECTION_OFFSETS["i_am_leading"]
         vec[off] = 1.0
 
-    # 10) value_per_card und strength_per_card pro Karte
+    # 10) value_per_card und strength_per_card (gecached ueber variant+lead)
     lead_suit: Suit | None = (
         state.current_trick_cards[0].suit if state.current_trick_cards else None
     )
     val_off, _ = SECTION_OFFSETS["value_per_card"]
     str_off, _ = SECTION_OFFSETS["strength_per_card"]
-    for suit in ALL_SUITS:
-        for rank in ALL_RANKS:
-            c = Card(suit, rank)
-            idx = card_index(c)
-            vec[val_off + idx] = card_value(c, state.variant) / MAX_CARD_VALUE
-            vec[str_off + idx] = (
-                _card_strength_feature(c, state.variant, lead_suit) / MAX_CARD_STRENGTH
-            )
+    val_arr, str_arr = _value_strength_arrays(state.variant, lead_suit)
+    vec[val_off:val_off + NUM_CARDS] = val_arr
+    vec[str_off:str_off + NUM_CARDS] = str_arr
 
     # 11) Lead-Suit
     if lead_suit is not None:
