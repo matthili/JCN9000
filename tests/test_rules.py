@@ -224,6 +224,62 @@ def test_buur_darf_immer_gespielt_werden_auch_wenn_bedienen_moeglich():
     assert C(Suit.EICHEL, Rank.UNTER) in legal
 
 
+def test_bedienen_oder_stechen_mit_lead_farbe_und_normalem_trumpf():
+    """Grundregel 'bedienen ODER stechen': wer die Lead-Farbe in der Hand hat,
+    darf trotzdem mit einem normalen Trumpf (nicht nur dem Buur) stechen.
+
+    Das war der Kern-Bug: die alte legal_moves gab in diesem Fall nur die
+    Lead-Farbe (+ Buur) zurueck und verbot das Stechen mit normalen Truempfen.
+    """
+    v = TRUMPF_EICHEL
+    hand = [
+        C(Suit.HERZ, Rank.ASS),      # Lead-Farbe
+        C(Suit.HERZ, Rank.SECHS),    # Lead-Farbe
+        C(Suit.EICHEL, Rank.ZEHN),   # normaler Trumpf, KEIN Buur
+        C(Suit.LAUB, Rank.ASS),      # andere Nicht-Trumpf-Farbe
+    ]
+    current = [C(Suit.HERZ, Rank.KOENIG)]  # Nicht-Trumpf-Lead, kein Trumpf im Stich
+    legal = legal_moves(hand, current, v)
+    # Bedienen erlaubt
+    assert C(Suit.HERZ, Rank.ASS) in legal
+    assert C(Suit.HERZ, Rank.SECHS) in legal
+    # Stechen mit normalem Trumpf erlaubt, OBWOHL Lead-Farbe vorhanden
+    assert C(Suit.EICHEL, Rank.ZEHN) in legal
+    # Andere Nicht-Trumpf-Farbe abwerfen bleibt verboten
+    assert C(Suit.LAUB, Rank.ASS) not in legal
+
+
+def test_bedienen_oder_stechen_kein_untertrumpfen_mit_lead_farbe():
+    """Lead-Farbe vorhanden, schon ein Trumpf im Stich: bedienen ODER HOEHER
+    stechen erlaubt, untertrumpfen verboten."""
+    v = TRUMPF_EICHEL
+    hand = [
+        C(Suit.HERZ, Rank.ASS),      # Lead-Farbe
+        C(Suit.EICHEL, Rank.SECHS),  # niedriger Trumpf -> Untertrumpfen
+        C(Suit.EICHEL, Rank.UNTER),  # Buur -> hoechster Trumpf
+    ]
+    # Herz angespielt, schon mit Eichel-Ober getrumpft
+    current = [C(Suit.HERZ, Rank.KOENIG), C(Suit.EICHEL, Rank.OBER)]
+    legal = legal_moves(hand, current, v)
+    assert C(Suit.HERZ, Rank.ASS) in legal          # bedienen
+    assert C(Suit.EICHEL, Rank.UNTER) in legal      # ueberstechen mit Buur
+    assert C(Suit.EICHEL, Rank.SECHS) not in legal  # untertrumpfen verboten
+
+
+def test_gumpf_bedienen_oder_stechen_mit_normalem_trumpf():
+    """Auch im Gumpf-Modus gilt: Lead-Farbe vorhanden -> bedienen ODER stechen."""
+    hand = [
+        C(Suit.HERZ, Rank.SECHS),    # Lead-Farbe (in Gumpf staerkste Herz-Karte)
+        C(Suit.EICHEL, Rank.ZEHN),   # normaler Trumpf
+        C(Suit.LAUB, Rank.ASS),      # andere Farbe
+    ]
+    current = [C(Suit.HERZ, Rank.ASS)]
+    legal = legal_moves(hand, current, GUMPF_EICHEL)
+    assert C(Suit.HERZ, Rank.SECHS) in legal
+    assert C(Suit.EICHEL, Rank.ZEHN) in legal       # stechen erlaubt
+    assert C(Suit.LAUB, Rank.ASS) not in legal
+
+
 def test_trumpflead_buur_einzeln_darf_zurueckgehalten_werden():
     v = TRUMPF_EICHEL
     hand = [

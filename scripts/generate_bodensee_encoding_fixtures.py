@@ -319,12 +319,14 @@ def build_fixtures() -> list[Fixture]:
         i_am_announcer=True,
     ))
 
-    # --- 6: Gumpf, 6 sticht in Nicht-Trumpf ---
+    # --- 6: Gumpf, bedienen ODER stechen (Tisch-Trumpf) ---
     fixtures.append(Fixture(
-        id="bfix_06_gumpf_sechs_sticht",
+        id="bfix_06_gumpf_bedienen_oder_stechen",
         description=(
-            "Gumpf-Eichel, Herz-Ass angespielt (Nicht-Trumpf). In Gumpf ist die "
-            "Herz-6 die staerkste Herz-Karte. Bedienzwang -> Herz-Karten legal."
+            "Gumpf-Eichel, Herz-Ass angespielt. Hand hat Herz-Karten (Lead-Farbe), "
+            "auf dem Tisch liegt sichtbar ein Trumpf (Eichel-Sieben). Grundregel "
+            "bedienen ODER stechen: legal sind beide Herz-Karten UND der "
+            "Tisch-Trumpf Eichel-Sieben."
         ),
         hand=[
             C(Suit.HERZ, Rank.SECHS), C(Suit.HERZ, Rank.ZEHN), C(Suit.LAUB, Rank.ASS),

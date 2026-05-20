@@ -142,9 +142,15 @@ def legal_moves(
     """Liste der Karten, die der Spieler legal ausspielen darf.
 
     TRUMPF- und GUMPF-Modus (beide mit Trumpf-Farbe):
-      - Farbzwang; Buur (Trumpf-Unter) immer spielbar; bei einzigem Trumpf=Buur darf
-        beliebige Karte; bei Trumpf-Lead muss Trumpf bedient werden (außer Buur einzig);
-        kein Untertrumpfen außer es bleibt keine andere Wahl.
+      Grundregel: **bedienen ODER stechen**.
+      - Nicht-Trumpf angespielt, Lead-Farbe in der Hand: man darf die Lead-Farbe
+        bedienen ODER mit einem stechbaren Trumpf trumpfen. Man darf KEINE
+        andere Nicht-Trumpf-Farbe abwerfen.
+      - Nicht-Trumpf angespielt, Lead-Farbe fehlt: frei abwerfen oder stechen.
+      - Trumpf angespielt: Trumpf-Zwang. Buur-Ausnahme — ist der Buur der
+        einzige Trumpf, darf eine beliebige Karte gespielt werden.
+      - Kein Untertrumpfen: liegt schon ein Trumpf im Stich, darf nur HOEHER
+        getrumpft werden (es sei denn, es bleibt keine andere Wahl).
 
     OBEN/UNTEN-Modus:
       - Reiner Farbzwang. Wer Lead-Farbe nicht bedienen kann, darf frei abwerfen.
@@ -165,39 +171,44 @@ def legal_moves(
     # Trumpf- oder Gumpf-Modus (beide haben eine trump_suit)
     assert variant.trump_suit is not None
     trumpf = variant.trump_suit
-    buur = Card(trumpf, Rank.UNTER)
-    has_buur = buur in hand
 
-    # Trumpf wurde angespielt
+    # Trumpf wurde angespielt -> Trumpf-Zwang mit Buur-Ausnahme
     if lead_suit == trumpf:
         trumps_in_hand = [c for c in hand if c.suit == trumpf]
         non_buur_trumps = [c for c in trumps_in_hand if c.rank != Rank.UNTER]
         if non_buur_trumps:
+            # Es gibt Nicht-Buur-Truempfe -> Trumpf-Zwang, alle Truempfe legal
             return trumps_in_hand
-        if trumps_in_hand:
-            return list(hand)
+        # Einziger Trumpf ist der Buur (oder gar kein Trumpf) -> Buur-Ausnahme:
+        # beliebige Karte erlaubt
         return list(hand)
 
-    # Nicht-Trumpf wurde angespielt
-    same_suit = [c for c in hand if c.suit == lead_suit]
-    if same_suit:
-        if has_buur and buur not in same_suit:
-            return same_suit + [buur]
-        return same_suit
-
+    # Nicht-Trumpf wurde angespielt. Grundregel: bedienen ODER stechen.
+    # Schritt 1: welche Truempfe sind stechbar (kein Untertrumpfen)?
     highest_trump_in_trick = _highest_trump_in(current_trick, trumpf)
     if highest_trump_in_trick is None:
-        return list(hand)
+        # Noch kein Trumpf im Stich -> jeder Trumpf sticht
+        playable_trumps = [c for c in hand if c.suit == trumpf]
+    else:
+        # Schon ein Trumpf im Stich -> nur hoehere Truempfe (kein Untertrumpfen)
+        highest_strength = TRUMP_RANK_ORDER[highest_trump_in_trick.rank]
+        playable_trumps = [
+            c for c in hand
+            if c.suit == trumpf and TRUMP_RANK_ORDER[c.rank] > highest_strength
+        ]
 
-    highest_strength = TRUMP_RANK_ORDER[highest_trump_in_trick.rank]
-    higher_trumps = [
-        c for c in hand
-        if c.suit == trumpf and TRUMP_RANK_ORDER[c.rank] > highest_strength
-    ]
+    # Schritt 2: legale Karten je nachdem ob die Lead-Farbe vorhanden ist
+    same_suit = [c for c in hand if c.suit == lead_suit]
+    if same_suit:
+        # Lead-Farbe vorhanden: bedienen ODER stechen.
+        return same_suit + playable_trumps
+
+    # Lead-Farbe fehlt: frei abwerfen oder stechen.
     non_trumps = [c for c in hand if c.suit != trumpf]
-    legal = higher_trumps + non_trumps
+    legal = playable_trumps + non_trumps
     if legal:
         return legal
+    # Zwangslage: nur zu niedrige Truempfe uebrig -> alles erlaubt
     return list(hand)
 
 
