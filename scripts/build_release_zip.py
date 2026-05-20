@@ -54,20 +54,23 @@ GAME_MODE_CONFIG: dict[str, dict] = {
     "kreuz": {
         "team_mode": "team",
         "encoding_doc": "state_encoding.md",
-        "encoding_version": None,   # None = aus encoding_fixtures.json lesen
+        "encoding_version": None,   # None = aus Fixtures-Datei lesen
         "include_fixtures": True,
+        "fixtures_file": "encoding_fixtures.json",
     },
     "solo": {
         "team_mode": "solo",
         "encoding_doc": "state_encoding.md",
         "encoding_version": None,
         "include_fixtures": True,
+        "fixtures_file": "encoding_fixtures.json",
     },
     "bodensee": {
         "team_mode": "bodensee_2p",
         "encoding_doc": "bodensee_state_encoding.md",
         "encoding_version": "bodensee_1.0.0",
-        "include_fixtures": False,  # Bodensee-Fixtures existieren noch nicht
+        "include_fixtures": True,
+        "fixtures_file": "bodensee_encoding_fixtures.json",
     },
 }
 
@@ -99,7 +102,7 @@ def build_zip(
     rules_json = spec_dir / "jass_rules.json"
     schema_json = spec_dir / "jass_rules.schema.json"
     encoding_md = spec_dir / mode_cfg["encoding_doc"]
-    fixtures_json = spec_dir / "fixtures" / "encoding_fixtures.json"
+    fixtures_json = spec_dir / "fixtures" / mode_cfg["fixtures_file"]
 
     required_files = [rules_json, schema_json, encoding_md]
     if mode_cfg["include_fixtures"]:
@@ -121,7 +124,7 @@ def build_zip(
         (encoding_md, f"{build_root}/{mode_cfg['encoding_doc']}"),
     ]
     if mode_cfg["include_fixtures"]:
-        artifacts.append((fixtures_json, f"{build_root}/encoding_fixtures.json"))
+        artifacts.append((fixtures_json, f"{build_root}/{mode_cfg['fixtures_file']}"))
 
     file_hashes: dict[str, str] = {}
 

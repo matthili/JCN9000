@@ -94,9 +94,16 @@ Varianten vor (4× Trumpf, 4× Gumpf, Oben, Unten, 2× Slalom).
 ## Verifikation
 
 Pflicht-Check beim TypeScript-Port: alle Test-Fixtures aus
-`spec/fixtures/bodensee_encoding_fixtures.json` (folgt mit erstem
-v0.9.0-Release) müssen byte-genau reproduziert werden (`atol=1e-5`).
+`spec/fixtures/bodensee_encoding_fixtures.json` müssen byte-genau reproduziert
+werden (`atol=1e-5`). Die Datei liegt jedem v0.9.0+-Release-ZIP bei und
+enthält 12 konkrete Spielzustände mit erwartetem `state_vector` (291) und
+`legal_mask` (36).
 
-Bis dahin: Sanity-Check über den Python-Encoder selbst —
-`tests/test_bodensee_encoder.py` enthält 19 Tests, die die wichtigsten
-Layout-Eigenschaften prüfen.
+Jede Fixture hat ein `input`-Objekt (vollständige Zustandsbeschreibung) und
+ein `expected`-Objekt (erwartete Encoder-Ausgabe). Der TS-Encoder liest das
+`input`, encodiert es und vergleicht mit `expected.state_vector` /
+`expected.legal_mask`.
+
+Erzeugt wird die Datei mit `python -m scripts.generate_bodensee_encoding_fixtures`.
+Der Test `tests/test_bodensee_fixtures.py` stellt sicher, dass sie nicht
+gegenüber dem Encoder driftet.
