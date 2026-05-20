@@ -288,6 +288,17 @@ def main():
                         help="ZIP ohne Modell bauen (nur Spec)")
     parser.add_argument("--allow-dirty", action="store_true",
                         help="Erlaubt uncommitted Aenderungen (nur sinnvoll mit --dry-run)")
+    parser.add_argument(
+        "--game-mode",
+        choices=["kreuz", "solo", "bodensee"],
+        default="kreuz",
+        help=(
+            "Spielmodus des Modells. kreuz/solo nutzen den v3.0.0-Encoder, "
+            "bodensee den bodensee_1.0.0-Encoder. Steuert, welche Encoder-Doku "
+            "ins ZIP kommt und welche encoding_version + team_mode ins MANIFEST. "
+            "Default kreuz."
+        ),
+    )
     parser.add_argument("-y", "--yes", action="store_true",
                         help="Alle Bestaetigungs-Fragen mit ja beantworten")
     args = parser.parse_args()
@@ -334,6 +345,7 @@ def main():
         spec_dir=Path("spec"),
         output=zip_path,
         skip_model=args.skip_model,
+        game_mode=args.game_mode,
     )
 
     # --- Schritt 6: Release-Notes ---

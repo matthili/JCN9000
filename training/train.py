@@ -71,25 +71,32 @@ def _load_shard_arrays(path_bytes) -> tuple[np.ndarray, np.ndarray, np.ndarray, 
     return X, masks, actions, rewards
 
 
-def _shard_to_sample_dataset(path_tensor: tf.Tensor) -> tf.data.Dataset:
-    """tf.data-Wrapper: laedt einen Shard und entpackt ihn in einen Sample-Stream."""
-    X, masks, actions, rewards = tf.py_function(
-        _load_shard_arrays,
-        [path_tensor],
-        [tf.float32, tf.float32, tf.int32, tf.float32],
-    )
-    # py_function liefert Shape (None, ...) zurueck -- wir muessen die zweite
-    # Dimension explizit setzen, sonst weiss tf.data nicht, was kommt.
-    X.set_shape([None, INPUT_DIM])
-    masks.set_shape([None, ACTION_DIM])
-    actions.set_shape([None])
-    rewards.set_shape([None])
-    return tf.data.Dataset.from_tensor_slices(
-        (
-            {"state": X, "mask": masks},
-            {"policy": actions, "value": rewards},
+def _make_shard_to_sample_dataset(input_dim: int):
+    """Erzeugt eine Closure, die einen Shard-Pfad-Tensor in ein
+    tf.data.Dataset entpackt -- mit der korrekten input_dim fuer set_shape.
+
+    Wird zur Laufzeit konstruiert, damit unterschiedliche Datensaetze (z.B.
+    Kreuz/Solo mit 421 Dims oder Bodensee mit 291) korrekt verarbeitet werden.
+    """
+    def _shard_to_sample_dataset(path_tensor: tf.Tensor) -> tf.data.Dataset:
+        X, masks, actions, rewards = tf.py_function(
+            _load_shard_arrays,
+            [path_tensor],
+            [tf.float32, tf.float32, tf.int32, tf.float32],
         )
-    )
+        # py_function liefert Shape (None, ...) zurueck -- wir muessen die zweite
+        # Dimension explizit setzen, sonst weiss tf.data nicht, was kommt.
+        X.set_shape([None, input_dim])
+        masks.set_shape([None, ACTION_DIM])
+        actions.set_shape([None])
+        rewards.set_shape([None])
+        return tf.data.Dataset.from_tensor_slices(
+            (
+                {"state": X, "mask": masks},
+                {"policy": actions, "value": rewards},
+            )
+        )
+    return _shard_to_sample_dataset
 
 
 def _make_streaming_dataset(
@@ -97,6 +104,7 @@ def _make_streaming_dataset(
     batch_size: int,
     shuffle: bool,
     seed: int,
+    input_dim: int,
     shuffle_buffer: int = 50_000,
     interleave_cycle: int = 4,
 ) -> tf.data.Dataset:
@@ -123,7 +131,7 @@ def _make_streaming_dataset(
         )
 
     ds = path_ds.interleave(
-        _shard_to_sample_dataset,
+        _make_shard_to_sample_dataset(input_dim),
         cycle_length=interleave_cycle,
         num_parallel_calls=tf.data.AUTOTUNE,
         deterministic=not shuffle,
@@ -140,6 +148,22 @@ def _make_streaming_dataset(
     return ds.prefetch(tf.data.AUTOTUNE)
 
 
+def _detect_input_dim_from_shard(shard_path: Path) -> int:
+    """Liest die zweite Achse des `X`-Arrays aus einem Shard.
+
+    Damit erkennt das Training automatisch, ob es Kreuz/Solo-Daten (421 dims)
+    oder Bodensee-Daten (291 dims) trainiert -- ohne dass der Aufrufer
+    `--input-dim` explizit setzen muss.
+    """
+    with np.load(shard_path) as d:
+        if "X" not in d.files:
+            raise ValueError(
+                f"Shard {shard_path} hat keinen 'X'-Schluessel -- ist es ein "
+                f"unterstuetztes Format?"
+            )
+        return int(d["X"].shape[1])
+
+
 def train(
     data_dir: Path,
     output_dir: Path,
@@ -152,6 +176,7 @@ def train(
     verbose: int = 2,
     hidden_units: tuple[int, ...] | None = None,
     warm_start: Path | None = None,
+    input_dim_override: int | None = None,
 ) -> None:
     """Trainiert das Modell.
 
@@ -166,6 +191,27 @@ def train(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     shard_split = split_shards(data_dir, val_fraction=val_fraction, seed=seed)
+
+    # Input-Dimension bestimmen:
+    # 1) Wenn explizit per --input-dim ueberschrieben -> diese verwenden
+    # 2) Sonst aus dem ersten Trainings-Shard auslesen
+    # 3) Fallback: training.encoder.INPUT_DIM (= 421 fuer Kreuz/Solo)
+    if input_dim_override is not None:
+        effective_input_dim = input_dim_override
+        print(f"Input-Dim explizit ueberschrieben: {effective_input_dim}")
+    elif shard_split.train_shards:
+        effective_input_dim = _detect_input_dim_from_shard(shard_split.train_shards[0])
+        if effective_input_dim != INPUT_DIM:
+            print(
+                f"Input-Dim aus Daten erkannt: {effective_input_dim} "
+                f"(Encoder-Default ist {INPUT_DIM}). "
+                f"Vermutlich Bodensee-Daten (bodensee_1.0.0 -> 291)."
+            )
+        else:
+            print(f"Input-Dim aus Daten erkannt: {effective_input_dim} (= Encoder-Default)")
+    else:
+        effective_input_dim = INPUT_DIM
+        print(f"Input-Dim Fallback (keine Daten gefunden): {effective_input_dim}")
     # Sample-Count nur lesen, um den Fortschritt anzuzeigen + steps_per_epoch
     # exakt zu rechnen. Schnell (nur Metadaten-Header pro Shard).
     print("Zaehle Samples pro Shard (Metadata-Sweep)…")
@@ -204,13 +250,13 @@ def train(
             )
     else:
         print(
-            f"\nModell wird aufgebaut (Input {INPUT_DIM}, Aktionen {ACTION_DIM}, "
+            f"\nModell wird aufgebaut (Input {effective_input_dim}, Aktionen {ACTION_DIM}, "
             f"Hidden {hidden_units or 'Default'})…"
         )
         from training.model import DEFAULT_HIDDEN
         used_hidden = tuple(hidden_units) if hidden_units else DEFAULT_HIDDEN
         model = build_model(
-            input_dim=INPUT_DIM,
+            input_dim=effective_input_dim,
             action_dim=ACTION_DIM,
             hidden_units=used_hidden,
             learning_rate=learning_rate,
@@ -252,12 +298,14 @@ def train(
         batch_size=batch_size,
         shuffle=True,
         seed=seed,
+        input_dim=effective_input_dim,
     )
     val_ds = _make_streaming_dataset(
         shard_split.val_shards,
         batch_size=batch_size,
         shuffle=False,
         seed=seed,
+        input_dim=effective_input_dim,
     )
     # steps_per_epoch/validation_steps explizit setzen -- bei Streaming-Datasets
     # weiss Keras sonst nicht, wann eine Epoche zu Ende ist.
@@ -320,6 +368,14 @@ def main():
             "--hidden wird in diesem Fall ignoriert."
         ),
     )
+    parser.add_argument(
+        "--input-dim", type=int, default=None,
+        help=(
+            "Optional: Input-Dimension explizit setzen. Default wird automatisch "
+            "aus dem ersten Shard erkannt (421 fuer Kreuz/Solo, 291 fuer "
+            "Bodensee). Nur setzen, wenn du etwas Spezielles brauchst."
+        ),
+    )
     args = parser.parse_args()
 
     train(
@@ -334,6 +390,7 @@ def main():
         verbose=args.verbose,
         hidden_units=tuple(args.hidden) if args.hidden else None,
         warm_start=Path(args.warm_start) if args.warm_start else None,
+        input_dim_override=args.input_dim,
     )
 
 

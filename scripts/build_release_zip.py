@@ -48,6 +48,30 @@ def _read_encoding_version(fixtures_json: Path) -> str:
     return json.loads(fixtures_json.read_text(encoding="utf-8"))["encoding_version"]
 
 
+# Spielmodus -> (team_mode-Manifest-Wert, Encoder-Doku-Dateiname, Encoding-Version)
+# Kreuz und Solo teilen sich den v3.0.0-Encoder; Bodensee hat einen eigenen.
+GAME_MODE_CONFIG: dict[str, dict] = {
+    "kreuz": {
+        "team_mode": "team",
+        "encoding_doc": "state_encoding.md",
+        "encoding_version": None,   # None = aus encoding_fixtures.json lesen
+        "include_fixtures": True,
+    },
+    "solo": {
+        "team_mode": "solo",
+        "encoding_doc": "state_encoding.md",
+        "encoding_version": None,
+        "include_fixtures": True,
+    },
+    "bodensee": {
+        "team_mode": "bodensee_2p",
+        "encoding_doc": "bodensee_state_encoding.md",
+        "encoding_version": "bodensee_1.0.0",
+        "include_fixtures": False,  # Bodensee-Fixtures existieren noch nicht
+    },
+}
+
+
 def build_zip(
     version: str,
     model_path: Path | None,
@@ -55,27 +79,49 @@ def build_zip(
     spec_dir: Path,
     output: Path,
     skip_model: bool = False,
+    game_mode: str = "kreuz",
 ) -> dict:
-    """Baut das Release-ZIP und gibt das Manifest als Dict zurück."""
+    """Baut das Release-ZIP und gibt das Manifest als Dict zurück.
+
+    Args:
+        game_mode: "kreuz" | "solo" | "bodensee". Steuert, welche Encoder-Doku
+            ins ZIP kommt, welche encoding_version + team_mode ins MANIFEST
+            geschrieben werden. Kreuz/Solo teilen sich den v3.0.0-Encoder,
+            Bodensee hat einen eigenen (bodensee_1.0.0).
+    """
+    if game_mode not in GAME_MODE_CONFIG:
+        sys.exit(
+            f"FEHLER: unbekannter game_mode '{game_mode}'. "
+            f"Erlaubt: {sorted(GAME_MODE_CONFIG)}"
+        )
+    mode_cfg = GAME_MODE_CONFIG[game_mode]
+
     rules_json = spec_dir / "jass_rules.json"
     schema_json = spec_dir / "jass_rules.schema.json"
-    encoding_md = spec_dir / "state_encoding.md"
+    encoding_md = spec_dir / mode_cfg["encoding_doc"]
     fixtures_json = spec_dir / "fixtures" / "encoding_fixtures.json"
 
-    for required in (rules_json, schema_json, encoding_md, fixtures_json):
+    required_files = [rules_json, schema_json, encoding_md]
+    if mode_cfg["include_fixtures"]:
+        required_files.append(fixtures_json)
+    for required in required_files:
         if not required.exists():
             sys.exit(f"FEHLER: Pflicht-Spec-Datei fehlt: {required}")
 
     spec_version = _read_spec_version(rules_json)
-    encoding_version = _read_encoding_version(fixtures_json)
+    if mode_cfg["encoding_version"] is not None:
+        encoding_version = mode_cfg["encoding_version"]
+    else:
+        encoding_version = _read_encoding_version(fixtures_json)
 
     build_root = f"jass-nn-{version}"
     artifacts: list[tuple[Path, str]] = [
         (rules_json, f"{build_root}/jass_rules.json"),
         (schema_json, f"{build_root}/jass_rules.schema.json"),
-        (encoding_md, f"{build_root}/state_encoding.md"),
-        (fixtures_json, f"{build_root}/encoding_fixtures.json"),
+        (encoding_md, f"{build_root}/{mode_cfg['encoding_doc']}"),
     ]
+    if mode_cfg["include_fixtures"]:
+        artifacts.append((fixtures_json, f"{build_root}/encoding_fixtures.json"))
 
     file_hashes: dict[str, str] = {}
 
@@ -103,6 +149,8 @@ def build_zip(
         "release_version": version,
         "spec_version": spec_version,
         "encoding_version": encoding_version,
+        "game_mode": game_mode,
+        "team_mode": mode_cfg["team_mode"],
         "build_timestamp": datetime.now(timezone.utc).isoformat(),
         "has_model": has_model,
         "files": [],
@@ -128,6 +176,7 @@ def build_zip(
     print(f"Geschrieben: {output} ({output.stat().st_size:,} bytes)")
     print(f"  Spec-Version:     {spec_version}")
     print(f"  Encoding-Version: {encoding_version}")
+    print(f"  Spielmodus:       {game_mode} (team_mode={mode_cfg['team_mode']})")
     print(f"  Release-Version:  {version}")
     print(f"  Modell enthalten: {'ja' if has_model else 'NEIN (nur Spec)'}")
     print(f"  Dateien:          {len(artifacts) + 1}")
@@ -146,6 +195,15 @@ def main():
         action="store_true",
         help="ZIP ohne Modell bauen (nur Spec-Files) — z.B. wenn das Modell separat angehängt wird",
     )
+    parser.add_argument(
+        "--game-mode",
+        choices=["kreuz", "solo", "bodensee"],
+        default="kreuz",
+        help=(
+            "Spielmodus des Modells. Steuert Encoder-Doku, encoding_version "
+            "und team_mode im MANIFEST. Default kreuz."
+        ),
+    )
     args = parser.parse_args()
 
     output = args.output or Path(f"dist/jass-nn-{args.version}.zip")
@@ -156,6 +214,7 @@ def main():
         spec_dir=args.spec_dir,
         output=output,
         skip_model=args.skip_model,
+        game_mode=args.game_mode,
     )
 
 

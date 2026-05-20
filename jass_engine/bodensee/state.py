@@ -35,6 +35,11 @@ class BodenseeGameState:
     opponent_hand_count: int = 0
     opponent_hidden_table_count: int = 0
 
+    # Was ich ueber meinen eigenen Tisch weiss (= an welchen Positionen noch
+    # eine verdeckte Karte unter der sichtbaren liegt). Wert: count der
+    # eigenen noch nicht aufgedeckten Stapel-Plaetze.
+    own_hidden_table_count: int = 0
+
     # Punktestand der laufenden Partie
     own_score: int = 0
     opp_score: int = 0

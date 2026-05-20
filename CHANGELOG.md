@@ -6,10 +6,33 @@ Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
-### Entwurf für v0.8.0 (Solo-Jass)
+### Entwurf für v0.9.0 (Bodensee-Jass)
 
-Die folgenden Punkte beschreiben den Stand kurz vor dem Release. Konkrete
-Eval-Zahlen werden nach abgeschlossenem Training eingetragen.
+### Hinzugefügt
+
+- **Neue Spielart Bodensee-Jass** ([`jass_engine/bodensee/`](jass_engine/bodensee/)):
+  - 2 Spieler, je 18 Karten verteilt auf Hand (6) + sichtbaren Tisch (6) + verdeckten Tisch (6)
+  - 18 Stiche pro Runde, Tisch-Aufdeck-Mechanik (sichtbare Karte spielen deckt die verdeckte darunter auf)
+  - Bedienzwang gilt über Hand + sichtbarem Tisch gemeinsam
+  - Keine Weisen, keine Stöcke, kein Schieben. Letzter Stich +5, Matsch +100
+  - Module: `player_state`, `deal`, `rules`, `trick`, `round`, `game`, plus `variants/bodensee_jass.py`
+- **Bodensee-Spieler** ([`players/bodensee_player.py`](players/bodensee_player.py), `bodensee_random_player.py`, `bodensee_heuristic_player.py`)
+- **Bodensee-Encoder** ([`training/bodensee_encoder.py`](training/bodensee_encoder.py)): eigene Encoding-Version `bodensee_1.0.0`, 291 Dimensionen, eigene Sektionen für die Tisch-Mechanik. Spec in [`spec/bodensee_state_encoding.md`](spec/bodensee_state_encoding.md).
+- **Bodensee-Datengen-Pipeline**: Heuristik-Bootstrap ([`generate_bodensee_heuristic_data.py`](training/data/generate_bodensee_heuristic_data.py)), MCTS-Determinisierung mit verdeckten Karten ([`bodensee_determinization.py`](training/data/bodensee_determinization.py)), Single-Trick-Lookahead, Single- und Multi-Process-MCTS-Datengen mit Chunk-Queue.
+- **Bodensee-Eval** ([`evaluation/bodensee_eval.py`](evaluation/bodensee_eval.py), `batched_bodensee_eval.py`, `run_bodensee_eval.py`): 2-Spieler-Vergleich mit paired-eval (gespiegelte Sitze, identische Karten).
+- **`training/train.py`**: erkennt die Input-Dimension automatisch aus den Daten (421 für Kreuz/Solo, 291 für Bodensee) — neuer optionaler `--input-dim`-Override.
+- **Modell-Karte v0.9.0** + Web-App-Briefing ([`docs/model_cards/v0.9.0.md`](docs/model_cards/v0.9.0.md), [`docs/web_app_update_v0.9.0.md`](docs/web_app_update_v0.9.0.md))
+
+### Spielstärke (Bodensee, paired-eval, 4000 Partien)
+
+| Vergleich | v0.9.0 Win-Rate | Gegner |
+|---|---|---|
+| vs. Bootstrap-Modell (Heuristik-Klon) | **74.0 %** | 26.0 % |
+| vs. Bodensee-Heuristik | **72.6 %** | 27.4 % |
+
+2-Spieler-Baseline ist 50 %. v0.9.0 liegt 22-24 Prozentpunkte darüber, ca. 28 Standardabweichungen. Pro Variante sehr gleichmäßig zwischen 69.9 % und 74.6 %, kein Schwachpunkt.
+
+## [0.8.0] - 2026-05-20 - Solo-Jass (4 Spieler, jeder gegen jeden)
 
 ### Hinzugefügt
 

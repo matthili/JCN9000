@@ -110,6 +110,7 @@ def play_bodensee_round(
                     opponent_visible_table=opp_ps.visible_table_cards,
                     opponent_hand_count=len(opp_ps.hand),
                     opponent_hidden_table_count=opp_ps.hidden_table_count,
+                    own_hidden_table_count=ps.hidden_table_count,
                     own_score=initial_scores[seat] + player_card_points[seat],
                     opp_score=initial_scores[opp_idx] + player_card_points[opp_idx],
                     round_idx=round_idx,
