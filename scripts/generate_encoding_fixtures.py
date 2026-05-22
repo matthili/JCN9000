@@ -485,9 +485,13 @@ def main():
 
     out_path = Path("spec/fixtures/encoding_fixtures.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # newline="\n": auf Windows wuerde write_text() sonst \n -> \r\n umsetzen,
+    # was den Spec-Drift-Check der Release-Pipeline (.gitattributes: *.json eol=lf)
+    # nach jedem Aufruf scheitern laesst.
     out_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
+        newline="\n",
     )
     print(f"Geschrieben: {out_path} ({out_path.stat().st_size:,} bytes)")
     print(f"  {len(fixtures)} Fixtures")
