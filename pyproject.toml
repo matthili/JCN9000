@@ -3,7 +3,7 @@ name = "jass-neuronales-netz"
 version = "0.1.0"
 description = "Vorarlberger Kreuz-Jass: regelgetreue Python-Engine, Heuristik-Bot, Trainings-Pipeline und neuronales Netz als KI-Gegner für eine separate Web-Anwendung."
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "AGPL-3.0-or-later" }
 requires-python = ">=3.11"
 keywords = [
     "jass",
@@ -18,7 +18,7 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Natural Language :: German",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",

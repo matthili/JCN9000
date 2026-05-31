@@ -3,6 +3,7 @@
 Inhalt des ZIPs:
     jass-nn-<version>/
     ├── MANIFEST.json              Versionen, Hashes, Build-Info
+    ├── LICENSE                    AGPL-3.0 + §7(b)-Attribution (gilt auch fuer die Gewichte)
     ├── jass_rules.json            Vollständige Regel-Spezifikation
     ├── jass_rules.schema.json     JSON-Schema zur Validierung
     ├── state_encoding.md          Encoder-Doku (132-dim Featurevektor)
@@ -125,6 +126,14 @@ def build_zip(
     ]
     if mode_cfg["include_fixtures"]:
         artifacts.append((fixtures_json, f"{build_root}/{mode_cfg['fixtures_file']}"))
+
+    # LICENSE mitliefern -- die AGPL-3.0-Copyleft- und §7(b)-Attributionspflicht
+    # gelten ausdruecklich auch fuer die im ZIP enthaltenen Modellgewichte.
+    license_file = spec_dir.parent / "LICENSE"
+    if license_file.exists():
+        artifacts.append((license_file, f"{build_root}/LICENSE"))
+    else:
+        print(f"WARNUNG: LICENSE nicht gefunden unter {license_file}", file=sys.stderr)
 
     file_hashes: dict[str, str] = {}
 

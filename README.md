@@ -4,7 +4,7 @@
 
 [![Tests](https://img.shields.io/badge/tests-142%20passing-brightgreen)](#verifikation)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](#voraussetzungen)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
 **Aktuelles Modell: [v0.7.0](docs/model_cards/v0.7.0.md)** — MCTS-augmentiertes Behavioral Cloning, 77.2 % Win-Rate gegen v0.5.0 in 4000 gepaarten Partien.
 
@@ -291,7 +291,14 @@ Damit hat die Web-App **eine einzige, versionierte Quelle** für Spielregeln und
 
 ## Lizenz
 
-[MIT](LICENSE) — frei nutzbar, auch kommerziell. Quellenangabe willkommen.
+[AGPL-3.0-or-later](LICENSE) — frei nutzbar, **auch kommerziell**. Bedingung
+(Copyleft): Wer den Code oder das Modell verändert und weitergibt **oder als
+Netzwerkdienst betreibt**, muss seine Version unter derselben AGPL offenlegen
+und den Ursprung nennen (Attributionspflicht nach §7(b), siehe
+[`LICENSE`](LICENSE)). Diese Bedingungen gelten auch für die ausgelieferten
+Modellgewichte.
+
+Der Autor betreibt die separate Web-App „Heb ab!" unter eigenen Rechten.
 
 ## Quellen für die Spielregeln
 
