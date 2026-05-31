@@ -4,9 +4,32 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
-## [Unreleased]
+## [0.7.1] / [0.8.1] / [0.9.1] - 2026-05-31 - Legal-Moves-Fix, komplettes Re-Training, Lizenzwechsel auf AGPL-3.0
 
-### Entwurf für v0.9.0 (Bodensee-Jass)
+Drei parallele Punkt-Releases (Kreuz / Solo / Bodensee), gemeinsam geschnitten nach einem kritischen Engine-Fix. Architektur und Encoding unverändert; alle Trainingsdaten gegen die korrigierte Engine neu erzeugt.
+
+### Behoben
+
+- **Kritischer Bedien-/Stech-Zwang-Fehler in `legal_moves`** ([`jass_engine/rules.py`](jass_engine/rules.py)): Bei nicht-trumpf Lead-Farbe und vorhandener Lead-Farbe auf der Hand waren bisher nur „bedienen + Buur" legal. Korrekt ist „**bedienen ODER stechen**" — alle Lead-Farb-Karten plus alle (nicht untertrumpfenden) Trümpfe plus der Buur. Vom App-Kollegen entdeckt. Drei neue Regel-Tests in [`tests/test_rules.py`](tests/test_rules.py). Der Fehler floss über MCTS-Datengen und Heuristik in alle Self-Play-Modelle (v0.7–v0.9) ein und machte ein vollständiges Re-Training nötig.
+- **Encoding-Fixture `bfix_06`** ([`spec/fixtures/bodensee_encoding_fixtures.json`](spec/fixtures/bodensee_encoding_fixtures.json)) hing am alten (falschen) Masken-Verhalten und wurde neu generiert. Der TypeScript-Encoder der Web-App muss die neue Fixture übernehmen.
+- **Spec-Gen-Skripte** ([`scripts/generate_jass_rules_json.py`](scripts/generate_jass_rules_json.py) u.a.) schreiben jetzt LF statt CRLF — der Spec-Drift-Check der Release-Pipeline scheiterte auf Windows sonst nach jedem Lauf.
+
+### Geändert
+
+- **Lizenz von MIT auf AGPL-3.0-or-later** mit Attributions-Zusatzklausel nach §7(b) (Ursprung muss in den „Appropriate Legal Notices" genannt werden). Kommerzielle Nutzung bleibt erlaubt; Weiterentwicklungen — auch im Netzwerkbetrieb (§13) — müssen unter AGPL offengelegt werden und den Ursprung nennen. Gilt ausdrücklich auch für die Modellgewichte; die [`LICENSE`](LICENSE) wird jetzt ins Release-ZIP gepackt. Bereits unter MIT bezogene Stände bleiben für ihre Bezieher MIT.
+- **Modell-Karten** [`v0.7.1`](docs/model_cards/v0.7.1.md) / [`v0.8.1`](docs/model_cards/v0.8.1.md) / [`v0.9.1`](docs/model_cards/v0.9.1.md) mit den neuen Eval-Zahlen.
+
+### Spielstärke (paired-eval, je 1000 Partien, batched-gpu)
+
+| Variante | vs. eigenes mcts1-Vorläufermodell | vs. Heuristik |
+|---|---|---|
+| Kreuz (v0.7.1) | **71.4 %** | **79.5 %** |
+| Solo (v0.8.1) | **47.2 %** (4-Spieler; Vorläufer 35.4 %, Rest je ~8.7 %) | **77.2 %** |
+| Bodensee (v0.9.1) | **53.0 %** | **77.8 %** |
+
+Gegen die jeweilige Heuristik liegt Kreuz +2.3 pp und Bodensee +5.2 pp über den MIT-Vorgängern v0.7.0 / v0.9.0.
+
+## [0.9.0] - 2026-05-20 - Bodensee-Jass (2 Spieler, Tisch-Mechanik)
 
 ### Hinzugefügt
 

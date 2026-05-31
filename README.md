@@ -1,12 +1,12 @@
 # Jass Neuronales Netz
 
-**Vorarlberger Kreuz-Jass** als regelgetreue Python-Engine plus neuronales Netz als KI-Gegner. Erzeugt versionierte Artefakte (Modell + Regel-Spezifikation), die in einer separaten Web-Anwendung als Multiplayer-Plattform eingebunden werden können.
+**Vorarlberger Jass** (Kreuz-, Solo- und Bodensee-Jass) als regelgetreue Python-Engine plus neuronale Netze als KI-Gegner. Erzeugt versionierte Artefakte (Modell + Regel-Spezifikation), die in einer separaten Web-Anwendung als Multiplayer-Plattform eingebunden werden können.
 
 [![Tests](https://img.shields.io/badge/tests-142%20passing-brightgreen)](#verifikation)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](#voraussetzungen)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
-**Aktuelles Modell: [v0.7.0](docs/model_cards/v0.7.0.md)** — MCTS-augmentiertes Behavioral Cloning, 77.2 % Win-Rate gegen v0.5.0 in 4000 gepaarten Partien.
+**Aktuelle Modelle (AGPL-3.0):** [Kreuz v0.7.1](docs/model_cards/v0.7.1.md) · [Solo v0.8.1](docs/model_cards/v0.8.1.md) · [Bodensee v0.9.1](docs/model_cards/v0.9.1.md) — MCTS-augmentiertes Behavioral Cloning. Win-Rate gegen die jeweilige Heuristik: 79.5 % / 77.2 % / 77.8 % (paired-eval, je 1000 Partien).
 
 ## Inhaltsverzeichnis
 
