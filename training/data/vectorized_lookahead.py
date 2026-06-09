@@ -42,6 +42,7 @@ from jass_engine.rules import (
 )
 from jass_engine.trick import CompletedTrick
 from jass_engine.variant import Variant
+from jass_engine.void_inference import infer_forbidden_cards
 from training.data.determinization import determinize_hands
 from training.encoder import encode_state, index_to_card, legal_action_mask
 from training.rl.batched_selfplay import InferenceServer
@@ -193,6 +194,14 @@ def _make_rollout(
     rng: random.Random,
 ) -> Rollout:
     """Erzeugt ein Rollout-Objekt fuer eine bestimmte first_move-Karte."""
+    # Void-aware Determinisierung: Mitspieler, die eine Farbe nicht bedient
+    # haben, koennen dort nichts mehr halten -> keine "halluzinierten" Truempfe
+    # bei blanken Gegnern (behebt das sinnlose Trumpf-Ziehen).
+    forbidden = infer_forbidden_cards(
+        state.completed_tricks,
+        state.announcement,
+        num_players=state.num_players,
+    )
     hands = determinize_hands(
         own_seat=state.player_idx,
         own_hand=hand,
@@ -201,6 +210,7 @@ def _make_rollout(
         current_trick_starter=state.current_trick_starter,
         num_players=state.num_players,
         rng=rng,
+        forbidden_by_seat=forbidden,
     )
 
     # first_move spielen (vor Rollout-Start)
