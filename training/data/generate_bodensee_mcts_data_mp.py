@@ -95,6 +95,7 @@ def _worker_process(worker_id: int, task_queue, args_dict: dict) -> None:
                 seed=seed,
                 chunk_idx=chunk_idx,
                 skip_existing=skip_existing,
+                lookahead_mode=args_dict.get("lookahead_mode", "single-trick"),
             )
             chunks_done += 1
 
@@ -143,6 +144,15 @@ def main():
     parser.add_argument("--inference-batch-size", type=int, default=1024)
     parser.add_argument("--variants", nargs="+", default=None)
     parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument(
+        "--lookahead-mode",
+        choices=["single-trick", "full-round"],
+        default="single-trick",
+        help=(
+            "single-trick = alte 1-Stich-Suche; full-round = vektorisierter "
+            "Full-Round-Lookahead (strategisch weitsichtiger, aber langsamer)."
+        ),
+    )
     args = parser.parse_args()
 
     _parse_target_distribution(args.target_distribution)  # Vorvalidierung

@@ -52,6 +52,7 @@ from training.bodensee_encoder import (
     legal_action_mask_bodensee,
 )
 from training.data.bodensee_mcts_lookahead import mcts_lookahead_best_card_bodensee
+from training.data.bodensee_vectorized_lookahead import best_card_bodensee_vectorized
 from training.rl.batched_selfplay import InferenceServer
 
 
@@ -101,11 +102,15 @@ class BodenseeMCTSAugmentedPlayer(BodenseePlayer):
         rollouts_per_card: int,
         rng: random.Random,
         fallback_for_announce: BodenseePlayer | None = None,
+        lookahead_mode: str = "single-trick",
     ):
         super().__init__(name)
         self.inference_server = inference_server
         self.rollouts_per_card = rollouts_per_card
         self.rng = rng
+        # "single-trick" = alte 1-Stich-Suche; "full-round" = vektorisierter
+        # Full-Round-Lookahead (strategisch weitsichtiger).
+        self.lookahead_mode = lookahead_mode
         self.fallback = fallback_for_announce or BodenseeHeuristicPlayer(
             name + "_fb", rng=random.Random(rng.randint(0, 10**9))
         )
@@ -146,15 +151,25 @@ class BodenseeMCTSAugmentedPlayer(BodenseePlayer):
             own_hidden_count=state.own_hidden_table_count,
         )
 
-        result = mcts_lookahead_best_card_bodensee(
-            own_state=synth_state,
-            state=state,
-            inference_server=self.inference_server,
-            i_am_announcer=self._i_am_announcer_current_round,
-            rollouts_per_card=self.rollouts_per_card,
-            rng=self.rng,
-        )
-        chosen = result.best_card
+        if self.lookahead_mode == "full-round":
+            chosen, _scores = best_card_bodensee_vectorized(
+                own_state=synth_state,
+                state=state,
+                inference_server=self.inference_server,
+                i_am_announcer=self._i_am_announcer_current_round,
+                rollouts_per_card=self.rollouts_per_card,
+                rng=self.rng,
+            )
+        else:
+            result = mcts_lookahead_best_card_bodensee(
+                own_state=synth_state,
+                state=state,
+                inference_server=self.inference_server,
+                i_am_announcer=self._i_am_announcer_current_round,
+                rollouts_per_card=self.rollouts_per_card,
+                rng=self.rng,
+            )
+            chosen = result.best_card
 
         # Trainings-Sample festhalten
         self.states.append(x)
@@ -268,6 +283,7 @@ def _play_one_variant_game(
     rollouts_per_card: int,
     target_distribution: list[tuple[int, float]],
     seed: int,
+    lookahead_mode: str = "single-trick",
 ) -> tuple[list[np.ndarray], list[np.ndarray], list[int], list[float]]:
     """Spielt EINE Bodensee-Partie mit erzwungener Ansage und MCTS-Augmented
     Spielern auf beiden Seiten. Returnt (states, masks, actions, rewards)
@@ -290,6 +306,7 @@ def _play_one_variant_game(
             rollouts_per_card=rollouts_per_card,
             rng=sub_rng,
             fallback_for_announce=fallback,
+            lookahead_mode=lookahead_mode,
         )
         players.append(p)
 
@@ -422,6 +439,7 @@ def generate_for_variant(
     seed: int,
     chunk_idx: int = 0,
     skip_existing: bool = False,
+    lookahead_mode: str = "single-trick",
 ) -> int:
     """Sammelt `games_per_variant` Bodensee-Partien und schreibt einen Shard.
 
@@ -453,7 +471,7 @@ def generate_for_variant(
             pool.submit(
                 _play_one_variant_game,
                 variant_spec, inference_server, rollouts_per_card,
-                target_distribution, s,
+                target_distribution, s, lookahead_mode,
             )
             for s in seeds
         ]
@@ -501,6 +519,15 @@ def main():
     parser.add_argument("--parallel-threads", type=int, default=32)
     parser.add_argument("--inference-batch-size", type=int, default=1024)
     parser.add_argument("--variants", nargs="+", default=None)
+    parser.add_argument(
+        "--lookahead-mode",
+        choices=["single-trick", "full-round"],
+        default="single-trick",
+        help=(
+            "single-trick = alte 1-Stich-Suche; full-round = vektorisierter "
+            "Full-Round-Lookahead (strategisch weitsichtiger, aber langsamer)."
+        ),
+    )
     args = parser.parse_args()
 
     target_distribution = _parse_target_distribution(args.target_distribution)
@@ -537,6 +564,7 @@ def main():
                 inference_server=server,
                 parallel_threads=args.parallel_threads,
                 seed=args.seed + hash(vs.label) % 10000,
+                lookahead_mode=args.lookahead_mode,
             )
             total_samples += n
         elapsed = time.perf_counter() - t0
