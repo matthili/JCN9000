@@ -37,12 +37,17 @@ class BodenseeHeuristicPlayer(BodenseePlayer):
         self,
         name: str,
         rng: random.Random | None = None,
-        slalom_base_factor: float = 0.85,
-        # Relative Skalen der Ansage-Familien (Trumpf = Anker, immer 1.0).
-        # Tunebar via scripts/tune_bodensee_announce.py.
-        gumpf_scale: float = 1.0,
-        oben_scale: float = 1.0,
-        unten_scale: float = 1.0,
+        # Defaults aus dem Bodensee-Ansage-Tuning (scripts/
+        # tune_bodensee_announce.py, 301 Kandidaten, Finale mit 20.000
+        # paired-Partien): Win-Share 51.9 % gegen die Vorgaenger-Defaults
+        # (0.85, Skalen 1.0), ~5 SD ueber dem Rauschen. Konsistentes Muster
+        # aller Top-Kandidaten: Oben/Unten daempfen -- die Trumpf-Familien
+        # sind im Bodensee (18 Stiche, Tisch-Mechanik) staerker als die
+        # alte Bewertung annahm. Wirkt auch auf die Ansage in NN-Partien.
+        slalom_base_factor: float = 0.88,
+        gumpf_scale: float = 1.02,
+        oben_scale: float = 0.92,
+        unten_scale: float = 0.89,
     ):
         super().__init__(name)
         self.rng = rng if rng is not None else random.Random()

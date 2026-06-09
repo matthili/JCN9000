@@ -41,10 +41,11 @@ from players.bodensee_heuristic_player import BodenseeHeuristicPlayer
 @dataclass(frozen=True)
 class BodenseeAnnounceParams:
     # Spiegelt die aktuellen BodenseeHeuristicPlayer-Defaults (= BASELINE-Anker).
-    slalom_base_factor: float = 0.85
-    gumpf_scale: float = 1.0
-    oben_scale: float = 1.0
-    unten_scale: float = 1.0
+    # Stand: Bodensee-Tuning vom 2026-06 (51.9 % gegen 0.85, Skalen 1.0).
+    slalom_base_factor: float = 0.88
+    gumpf_scale: float = 1.02
+    oben_scale: float = 0.92
+    unten_scale: float = 0.89
 
     def as_tuple(self) -> tuple:
         return (

@@ -49,17 +49,17 @@ from players.heuristic_player import HeuristicPlayer
 @dataclass(frozen=True)
 class AnnounceParams:
     # Muss die aktuellen HeuristicPlayer-Defaults spiegeln -- BASELINE ist der
-    # Vergleichsanker. Stand: Tuning-Lauf vom 2026-06 (52.9 % gegen die
-    # Vorgaenger-Defaults 55 / 0.95 / 2 / 1).
-    push_threshold: int = 59
-    slalom_base_factor: float = 0.86
-    slalom_concentration_factor: int = 0
-    slalom_spread_factor: int = 1
+    # Vergleichsanker. Stand: Tuning v2 vom 2026-06 (52.1 % gegen die
+    # v1-Baseline 59 / 0.86 / 0 / 1 mit Skalen 1.0).
+    push_threshold: int = 62
+    slalom_base_factor: float = 0.90
+    slalom_concentration_factor: int = 2
+    slalom_spread_factor: int = 0
     # Relative Skalen der Ansage-Familien (Trumpf = Anker). Seit Tuning v2
-    # mitdurchsucht -- kalibriert z.B. die beobachtete Gumpf-Haeufigkeit.
-    gumpf_scale: float = 1.0
-    oben_scale: float = 1.0
-    unten_scale: float = 1.0
+    # mitdurchsucht -- kalibriert z.B. die Gumpf-Haeufigkeit.
+    gumpf_scale: float = 1.09
+    oben_scale: float = 0.95
+    unten_scale: float = 1.06
 
     def as_tuple(self) -> tuple:
         return (

@@ -90,20 +90,22 @@ class HeuristicPlayer(Player):
     def __init__(
         self,
         name: str,
-        # Defaults aus dem Ansage-Tuning (scripts/tune_heuristic_announce.py,
-        # 301 Kandidaten, Finale mit 20.000 paired-Partien): 52.9 % gegen die
-        # alte Baseline (55 / 0.95 / 2 / 1), +2.9 pp bei 2-SD-Schwelle 0.7 pp.
-        # Lesart: etwas bereitwilliger schieben, Slalom zurueckhaltender ansagen.
-        push_threshold: int = 59,
-        slalom_base_factor: float = 0.86,
-        slalom_concentration_factor: int = 0,
-        slalom_spread_factor: int = 1,
+        # Defaults aus dem Ansage-Tuning v2 (scripts/tune_heuristic_announce.py,
+        # 301 Kandidaten ueber 7 Parameter, Finale mit 20.000 paired-Partien):
+        # 52.1 % gegen die v1-Baseline (59 / 0.86 / 0 / 1, Skalen 1.0), die
+        # ihrerseits 52.9 % gegen die Urspruengs-Defaults (55 / 0.95 / 2 / 1)
+        # erreichte. Lesart v2: Gumpf etwas MUTIGER ansagen (Skale 1.09 --
+        # haeufiges Gumpf gewinnt nachweislich), Oben leicht daempfen.
+        push_threshold: int = 62,
+        slalom_base_factor: float = 0.90,
+        slalom_concentration_factor: int = 2,
+        slalom_spread_factor: int = 0,
         # Relative Skalen der Ansage-Familien (Trumpf = Anker, immer 1.0).
-        # 1.0 = bisheriges Verhalten; <1 macht die Familie unattraktiver.
+        # <1 macht die Familie unattraktiver, >1 attraktiver.
         # Tunebar via scripts/tune_heuristic_announce.py.
-        gumpf_scale: float = 1.0,
-        oben_scale: float = 1.0,
-        unten_scale: float = 1.0,
+        gumpf_scale: float = 1.09,
+        oben_scale: float = 0.95,
+        unten_scale: float = 1.06,
         allowed_modes: set[PlayMode] | None = None,
         allow_slalom: bool = True,
         trump_void_awareness: bool = True,

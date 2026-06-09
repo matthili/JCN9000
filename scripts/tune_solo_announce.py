@@ -45,12 +45,13 @@ from players.solo_heuristic_player import SoloHeuristicPlayer
 @dataclass(frozen=True)
 class SoloAnnounceParams:
     # Spiegelt die aktuellen SoloHeuristicPlayer-Defaults (= BASELINE-Anker).
-    slalom_base_factor: float = 0.85
+    # Stand: Solo-Tuning vom 2026-06 (51.1 % gegen 0.85 / 1 / 1, Skalen 1.0).
+    slalom_base_factor: float = 0.94
     slalom_concentration_factor: int = 1
     slalom_spread_factor: int = 1
-    gumpf_scale: float = 1.0
-    oben_scale: float = 1.0
-    unten_scale: float = 1.0
+    gumpf_scale: float = 1.06
+    oben_scale: float = 0.91
+    unten_scale: float = 1.10
 
     def as_tuple(self) -> tuple:
         return (

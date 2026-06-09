@@ -37,21 +37,24 @@ class SoloHeuristicPlayer(HeuristicPlayer):
     aber:
     - `push_threshold=0` -- irrelevant, weil im Solo `allow_push=False`
       gilt und damit `can_push` immer False ist; nur zur Klarheit gesetzt.
-    - `slalom_base_factor=0.85` -- konservativer als die Team-Heuristik (deren
-      Default liegt seit dem Ansage-Tuning bei 0.86, davor 0.95).
-    - `slalom_concentration_factor=1` (Team-Default seit Tuning: 0, davor 2).
+    - Die Defaults stammen aus dem Solo-Ansage-Tuning
+      (scripts/tune_solo_announce.py, 301 Kandidaten, Finale mit 20.000
+      paired-Partien): Win-Share 51.1 % gegen die Vorgaenger-Defaults
+      (0.85 / 1 / 1, Skalen 1.0) -- knapp ueber der 2-SD-Schwelle (1.0 pp),
+      also ein kleiner, aber gemessener Vorteil. Konsistentes Muster der
+      Top-Kandidaten: gumpf_scale > 1 (Gumpf im Solo etwas mutiger ansagen).
     """
 
     def __init__(
         self,
         name: str,
         rng: random.Random | None = None,
-        slalom_base_factor: float = 0.85,
+        slalom_base_factor: float = 0.94,
         slalom_concentration_factor: int = 1,
         slalom_spread_factor: int = 1,
-        gumpf_scale: float = 1.0,
-        oben_scale: float = 1.0,
-        unten_scale: float = 1.0,
+        gumpf_scale: float = 1.06,
+        oben_scale: float = 0.91,
+        unten_scale: float = 1.10,
     ):
         super().__init__(
             name=name,
