@@ -351,8 +351,16 @@ def test_ansage_kann_nicht_schieben_in_runde_1():
 
 def test_ansage_slalom_bei_komplementaerer_hand():
     """Hand mit niedrigen Karten (6,7,8) in einer Farbe und hohen (O,K,A) in einer
-    anderen sollte Slalom auslösen, weil beide Modi unterstützt werden."""
-    bot = HeuristicPlayer("Bot")
+    anderen sollte Slalom auslösen, weil beide Modi unterstützt werden.
+
+    Mechanismus-Test: Slalom-Parameter explizit gesetzt, damit der Test nicht
+    an den (per Win-Rate getunten, bewusst Slalom-zurückhaltenden) Defaults hängt."""
+    bot = HeuristicPlayer(
+        "Bot",
+        slalom_base_factor=0.95,
+        slalom_concentration_factor=2,
+        slalom_spread_factor=1,
+    )
     hand = [
         # F1 = Eichel: 6, 7, 8, 9 (4 Karten, alle unten-stark)
         C(Suit.EICHEL, Rank.SECHS),
@@ -396,8 +404,16 @@ def test_ansage_kein_slalom_bei_einseitiger_hand():
 def test_konzentrierte_hand_bekommt_hoeheren_slalom_score_als_verstreute():
     """Eine Hand mit 3 oben-/3 unten-Karten in jeweils gleicher Farbe sollte einen
     deutlich höheren Slalom-Score haben als eine Hand mit gleich vielen Karten,
-    die aber über alle 4 Farben verstreut sind. Das prüft die Konzentrations-Logik."""
-    bot = HeuristicPlayer("Bot")
+    die aber über alle 4 Farben verstreut sind. Das prüft die Konzentrations-Logik.
+
+    Mechanismus-Test: Konzentrations-Faktor explizit > 0 gesetzt (die getunten
+    Defaults haben ihn auf 0 -- dann wäre die getestete Logik per Default aus)."""
+    bot = HeuristicPlayer(
+        "Bot",
+        slalom_base_factor=0.95,
+        slalom_concentration_factor=2,
+        slalom_spread_factor=1,
+    )
 
     # Konzentriert: Eichel = O,K,A + Laub = 6,7,8 + 3 Filler
     konzentriert = [

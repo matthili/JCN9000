@@ -90,9 +90,13 @@ class HeuristicPlayer(Player):
     def __init__(
         self,
         name: str,
-        push_threshold: int = 55,
-        slalom_base_factor: float = 0.95,
-        slalom_concentration_factor: int = 2,
+        # Defaults aus dem Ansage-Tuning (scripts/tune_heuristic_announce.py,
+        # 301 Kandidaten, Finale mit 20.000 paired-Partien): 52.9 % gegen die
+        # alte Baseline (55 / 0.95 / 2 / 1), +2.9 pp bei 2-SD-Schwelle 0.7 pp.
+        # Lesart: etwas bereitwilliger schieben, Slalom zurueckhaltender ansagen.
+        push_threshold: int = 59,
+        slalom_base_factor: float = 0.86,
+        slalom_concentration_factor: int = 0,
         slalom_spread_factor: int = 1,
         allowed_modes: set[PlayMode] | None = None,
         allow_slalom: bool = True,

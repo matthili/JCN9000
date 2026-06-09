@@ -37,8 +37,9 @@ class SoloHeuristicPlayer(HeuristicPlayer):
     aber:
     - `push_threshold=0` -- irrelevant, weil im Solo `allow_push=False`
       gilt und damit `can_push` immer False ist; nur zur Klarheit gesetzt.
-    - `slalom_base_factor=0.85` (Team-Default: 0.95) -- konservativer.
-    - `slalom_concentration_factor=1` (Team-Default: 2) -- halbiert.
+    - `slalom_base_factor=0.85` -- konservativer als die Team-Heuristik (deren
+      Default liegt seit dem Ansage-Tuning bei 0.86, davor 0.95).
+    - `slalom_concentration_factor=1` (Team-Default seit Tuning: 0, davor 2).
     """
 
     def __init__(

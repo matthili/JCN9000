@@ -48,9 +48,12 @@ from players.heuristic_player import HeuristicPlayer
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class AnnounceParams:
-    push_threshold: int = 55
-    slalom_base_factor: float = 0.95
-    slalom_concentration_factor: int = 2
+    # Muss die aktuellen HeuristicPlayer-Defaults spiegeln -- BASELINE ist der
+    # Vergleichsanker. Stand: Tuning-Lauf vom 2026-06 (52.9 % gegen die
+    # Vorgaenger-Defaults 55 / 0.95 / 2 / 1).
+    push_threshold: int = 59
+    slalom_base_factor: float = 0.86
+    slalom_concentration_factor: int = 0
     slalom_spread_factor: int = 1
 
     def as_tuple(self) -> tuple:
