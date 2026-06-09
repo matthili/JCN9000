@@ -35,7 +35,7 @@ gelohnt hat.
 | 1. CPU-Nebenspur: Heuristik-Void-Eval + opt. Ansage-Tuning | CPU, beliebige Maschine, parallel | Eval: Minuten · Tuning: 1–6 h |
 | 2. Kreuz mcts3 (60 Rollouts) | 500 Spiele/Var | ~26 h |
 | 3. Solo mcts3 (60 Rollouts) | 500 Spiele/Var | ~36 h |
-| 4. Bodensee mcts3 (**full-round**) | kalibriert (s. Schritt 0) | ~25–35 h |
+| 4. Bodensee mcts3 (**full-round**) | 500 Spiele/Var (kalibriert via Schritt 0) | ~14–27 h |
 | Training + Evals (alle) | — | ~3 h |
 | **Summe** | | **~95–110 h** |
 
@@ -114,6 +114,7 @@ python -u -m training.data.generate_mcts_data_mp \
     --workers 8 --parallel-threads-per-worker 32 \
     --inference-batch-size 1024 \
     --lookahead-mode full-round-vec \
+    --skip-existing \
     --output data/mcts_fixed/phase3 \
     2>&1 | tee logs/kreuz_mcts3_datagen.log
 
@@ -151,6 +152,7 @@ python -u -m training.data.generate_solo_mcts_data_mp \
     --rollouts-per-card 60 --target-distribution "500:0.5,1000:0.5" \
     --workers 8 --parallel-threads-per-worker 32 \
     --inference-batch-size 1024 \
+    --skip-existing \
     --output data/solo_mcts_fixed/phase3 \
     2>&1 | tee logs/solo_mcts3_datagen.log
 
@@ -175,18 +177,24 @@ python -m evaluation.run_solo_eval \
 ## Schritt 4 — Bodensee mcts3 (Full-Round-Lookahead)
 
 Der Headline-Schritt: erstmals **Full-Round** statt 1-Stich. Rollouts bei 30
-(die Tiefe selbst bringt schon viel Signal); `--games-per-variant` aus Schritt 0
-kalibriert (provisorisch 250).
+(die Tiefe selbst bringt schon viel Signal). 500 Spiele/Variante = dieselbe
+Datenmenge wie B-mcts2 — das Eval-Gate misst dann rein die Lehrer-Qualität
+(full-round vs single-trick), nicht unterschiedliche Datenmengen.
+
+Kalibrierung aus Schritt 0: full-round erzeugt ~335 Samples/Spiel (B-mcts2:
+322 — gleiches Volumen pro Spiel) und ist pro Worker max. ~2x langsamer als
+single-trick (Erzwungene-Zuege-Abkuerzung wirkt).
 
 ```bash
-# Datengen (~25–35 h, je nach Schritt-0-Messung)
+# Datengen (~14–27 h)
 python -u -m training.data.generate_bodensee_mcts_data_mp \
     --warm-start models/bodensee_mcts2/best.keras \
-    --games-per-variant 250 --games-per-chunk 25 \
+    --games-per-variant 500 --games-per-chunk 25 \
     --rollouts-per-card 30 --target-distribution "500:0.5,1000:0.5" \
     --workers 8 --parallel-threads-per-worker 32 \
     --inference-batch-size 1024 \
     --lookahead-mode full-round \
+    --skip-existing \
     --output data/bodensee_mcts_fixed/phase3 \
     2>&1 | tee logs/bodensee_mcts3_datagen.log
 
