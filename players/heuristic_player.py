@@ -24,6 +24,7 @@ from jass_engine.card import ALL_SUITS, Card, Rank, Suit
 from jass_engine.player import GameState, Player
 from jass_engine.rules import card_strength, card_value, legal_moves
 from jass_engine.variant import Announcement, PlayMode, Variant
+from jass_engine.void_inference import infer_forbidden_cards, seat_is_void_in_trump
 from jass_engine.weis import Weis
 
 
@@ -95,6 +96,7 @@ class HeuristicPlayer(Player):
         slalom_spread_factor: int = 1,
         allowed_modes: set[PlayMode] | None = None,
         allow_slalom: bool = True,
+        trump_void_awareness: bool = True,
         rng: random.Random | None = None,
     ):
         """
@@ -120,6 +122,10 @@ class HeuristicPlayer(Player):
         self.slalom_spread_factor = slalom_spread_factor
         self.allowed_modes = allowed_modes  # None heisst "alle"
         self.allow_slalom = allow_slalom
+        # Wenn True: beim Anspielen keine Truempfe mehr ziehen, sobald beide
+        # Gegner beweisbar trumpffrei sind (man zoege sonst nur dem Partner die
+        # Truempfe). Behebt das beobachtete "sinnlose Austrumpfen".
+        self.trump_void_awareness = trump_void_awareness
         self.rng = rng if rng is not None else random.Random()
 
     # ---------- Ansage ----------
@@ -370,16 +376,41 @@ class HeuristicPlayer(Player):
             card_strength(c, c.suit, state.variant),
         ))
 
+    def _opponents_void_in_trump(self, state: GameState, trumpf: Suit) -> bool:
+        """True, wenn ALLE Gegner beweisbar trumpffrei sind (Buur ignoriert).
+
+        Dann bringt Trumpf-Ziehen nichts -- man zieht nur dem Partner die
+        Truempfe. Leitet die Voids aus der Stichhistorie ab.
+        """
+        if not self.trump_void_awareness:
+            return False
+        forbidden = infer_forbidden_cards(
+            state.completed_tricks,
+            state.announcement,
+            num_players=state.num_players,
+        )
+        opponents = [
+            s for s in range(state.num_players)
+            if state.teams[s] != state.teams[state.player_idx]
+        ]
+        if not opponents:
+            return False
+        return all(seat_is_void_in_trump(forbidden[s], trumpf) for s in opponents)
+
     def _choose_opening(self, legal: list[Card], state: GameState) -> Card:
         """Erste Karte des Stichs."""
         if state.variant.mode == PlayMode.TRUMPF:
             assert state.variant.trump_suit is not None
             trumpf = state.variant.trump_suit
-            # Hohe Trümpfe ziehen, damit Gegner ihre Trümpfe verschwenden
-            for special in (Rank.UNTER, Rank.NEUN, Rank.ASS):
-                c = Card(trumpf, special)
-                if c in legal:
-                    return c
+            # Hohe Trümpfe ziehen, damit Gegner ihre Trümpfe verschwenden --
+            # ABER nur, solange die Gegner ueberhaupt noch Trumpf haben koennen.
+            # Sind beide blank, spielt man stattdessen hohe Seitenkarten an und
+            # behaelt die Truempfe als sichere Stich-Garanten (Matsch).
+            if not self._opponents_void_in_trump(state, trumpf):
+                for special in (Rank.UNTER, Rank.NEUN, Rank.ASS):
+                    c = Card(trumpf, special)
+                    if c in legal:
+                        return c
             # Sonst: Ass einer Nicht-Trumpf-Farbe (sicherer Stich, wenn keiner trumpfen muss)
             non_trump_aces = [
                 c for c in legal
@@ -399,11 +430,13 @@ class HeuristicPlayer(Player):
         if state.variant.mode == PlayMode.GUMPF:
             assert state.variant.trump_suit is not None
             trumpf = state.variant.trump_suit
-            # In der Trumpf-Farbe: hohe Trümpfe ziehen wie bei Trumpf.
-            for special in (Rank.UNTER, Rank.NEUN, Rank.ASS):
-                c = Card(trumpf, special)
-                if c in legal:
-                    return c
+            # In der Trumpf-Farbe: hohe Trümpfe ziehen wie bei Trumpf -- aber
+            # nicht mehr, wenn die Gegner schon trumpffrei sind.
+            if not self._opponents_void_in_trump(state, trumpf):
+                for special in (Rank.UNTER, Rank.NEUN, Rank.ASS):
+                    c = Card(trumpf, special)
+                    if c in legal:
+                        return c
             # In Nicht-Trumpf-Farben: 6er sind die sicheren Sticher (Geiss-Logik).
             non_trump_6 = [
                 c for c in legal
