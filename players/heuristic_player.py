@@ -98,6 +98,12 @@ class HeuristicPlayer(Player):
         slalom_base_factor: float = 0.86,
         slalom_concentration_factor: int = 0,
         slalom_spread_factor: int = 1,
+        # Relative Skalen der Ansage-Familien (Trumpf = Anker, immer 1.0).
+        # 1.0 = bisheriges Verhalten; <1 macht die Familie unattraktiver.
+        # Tunebar via scripts/tune_heuristic_announce.py.
+        gumpf_scale: float = 1.0,
+        oben_scale: float = 1.0,
+        unten_scale: float = 1.0,
         allowed_modes: set[PlayMode] | None = None,
         allow_slalom: bool = True,
         trump_void_awareness: bool = True,
@@ -124,6 +130,9 @@ class HeuristicPlayer(Player):
         self.slalom_base_factor = slalom_base_factor
         self.slalom_concentration_factor = slalom_concentration_factor
         self.slalom_spread_factor = slalom_spread_factor
+        self.gumpf_scale = gumpf_scale
+        self.oben_scale = oben_scale
+        self.unten_scale = unten_scale
         self.allowed_modes = allowed_modes  # None heisst "alle"
         self.allow_slalom = allow_slalom
         # Wenn True: beim Anspielen keine Truempfe mehr ziehen, sobald beide
@@ -147,11 +156,14 @@ class HeuristicPlayer(Player):
 
         # Gumpf bewerten: gleicher Trumpf-Anteil wie Trumpf, aber Non-Trumpf-Asse
         # sind nichts mehr wert (6er übernehmen), darum eigene Bewertungsfunktion.
+        # gumpf_scale kalibriert, wie attraktiv die Familie relativ zu Trumpf ist.
         for suit in ALL_SUITS:
-            scores[Announcement(variant=Variant.gumpf(suit))] = self._score_gumpf(hand, suit)
+            scores[Announcement(variant=Variant.gumpf(suit))] = int(
+                self._score_gumpf(hand, suit) * self.gumpf_scale
+            )
 
-        oben_score = self._score_oben(hand)
-        unten_score = self._score_unten(hand)
+        oben_score = int(self._score_oben(hand) * self.oben_scale)
+        unten_score = int(self._score_unten(hand) * self.unten_scale)
         scores[Announcement(variant=Variant.oben())] = oben_score
         scores[Announcement(variant=Variant.unten())] = unten_score
 

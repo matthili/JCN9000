@@ -81,15 +81,29 @@ paired-eval; Heuristik-Partien sind billig → wenige Minuten):
 python -m scripts.eval_heuristic_void_rule --games 8000 --workers 12
 ```
 
-**1b) Ansage-Tuning (optional)** — optimiert die vier Ansage-Parameter gegen die
-Baseline. Übernimmt nur, was über dem 2-SD-Rauschen liegt:
+**1b) Ansage-Tuning (optional)** — optimiert die Ansage-Parameter (inkl. der
+Familien-Skalen `gumpf/oben/unten_scale`, Trumpf = Anker) gegen die Baseline.
+Übernimmt nur, was über dem 2-SD-Rauschen liegt. Für jede Spielart gibt es ein
+eigenes Skript:
 
 ```bash
+# Kreuz (7 Parameter)
 python -m scripts.tune_heuristic_announce \
-    --games-screen 800 --num-candidates 80 \
-    --games-final 6000 --top-k 6 \
-    --workers 12 \
-    --output heuristic_announce_tuned.json
+    --games-screen 1000 --num-candidates 300 \
+    --games-final 20000 --top-k 6 \
+    --workers 12 --output announce_tuned.json
+
+# Solo (6 Parameter; kein Schieben; Vielfache von 4 wegen Sitz-Rotation)
+python -m scripts.tune_solo_announce \
+    --games-screen 1000 --num-candidates 300 \
+    --games-final 20000 --top-k 6 \
+    --workers 12 --output solo_announce_tuned.json
+
+# Bodensee (4 Parameter; wirkt auch auf die Ansage in NN-Partien der App)
+python -m scripts.tune_bodensee_announce \
+    --games-screen 1000 --num-candidates 300 \
+    --games-final 20000 --top-k 6 \
+    --workers 12 --output bodensee_announce_tuned.json
 ```
 
 → Signifikante Verbesserungen werden als neue `HeuristicPlayer`-Defaults

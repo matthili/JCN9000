@@ -38,10 +38,18 @@ class BodenseeHeuristicPlayer(BodenseePlayer):
         name: str,
         rng: random.Random | None = None,
         slalom_base_factor: float = 0.85,
+        # Relative Skalen der Ansage-Familien (Trumpf = Anker, immer 1.0).
+        # Tunebar via scripts/tune_bodensee_announce.py.
+        gumpf_scale: float = 1.0,
+        oben_scale: float = 1.0,
+        unten_scale: float = 1.0,
     ):
         super().__init__(name)
         self.rng = rng if rng is not None else random.Random()
         self.slalom_base_factor = slalom_base_factor
+        self.gumpf_scale = gumpf_scale
+        self.oben_scale = oben_scale
+        self.unten_scale = unten_scale
 
     # ---------- Ansage ----------
 
@@ -56,9 +64,11 @@ class BodenseeHeuristicPlayer(BodenseePlayer):
         scores: dict[Announcement, int] = {}
         for suit in ALL_SUITS:
             scores[Announcement(variant=Variant.trumpf(suit))] = self._score_trumpf(pool, suit)
-            scores[Announcement(variant=Variant.gumpf(suit))] = self._score_gumpf(pool, suit)
-        oben_score = self._score_oben(pool)
-        unten_score = self._score_unten(pool)
+            scores[Announcement(variant=Variant.gumpf(suit))] = int(
+                self._score_gumpf(pool, suit) * self.gumpf_scale
+            )
+        oben_score = int(self._score_oben(pool) * self.oben_scale)
+        unten_score = int(self._score_unten(pool) * self.unten_scale)
         scores[Announcement(variant=Variant.oben())] = oben_score
         scores[Announcement(variant=Variant.unten())] = unten_score
 

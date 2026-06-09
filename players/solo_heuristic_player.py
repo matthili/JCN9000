@@ -49,6 +49,9 @@ class SoloHeuristicPlayer(HeuristicPlayer):
         slalom_base_factor: float = 0.85,
         slalom_concentration_factor: int = 1,
         slalom_spread_factor: int = 1,
+        gumpf_scale: float = 1.0,
+        oben_scale: float = 1.0,
+        unten_scale: float = 1.0,
     ):
         super().__init__(
             name=name,
@@ -56,5 +59,8 @@ class SoloHeuristicPlayer(HeuristicPlayer):
             slalom_base_factor=slalom_base_factor,
             slalom_concentration_factor=slalom_concentration_factor,
             slalom_spread_factor=slalom_spread_factor,
+            gumpf_scale=gumpf_scale,
+            oben_scale=oben_scale,
+            unten_scale=unten_scale,
             rng=rng,
         )

@@ -55,6 +55,11 @@ class AnnounceParams:
     slalom_base_factor: float = 0.86
     slalom_concentration_factor: int = 0
     slalom_spread_factor: int = 1
+    # Relative Skalen der Ansage-Familien (Trumpf = Anker). Seit Tuning v2
+    # mitdurchsucht -- kalibriert z.B. die beobachtete Gumpf-Haeufigkeit.
+    gumpf_scale: float = 1.0
+    oben_scale: float = 1.0
+    unten_scale: float = 1.0
 
     def as_tuple(self) -> tuple:
         return (
@@ -62,6 +67,9 @@ class AnnounceParams:
             self.slalom_base_factor,
             self.slalom_concentration_factor,
             self.slalom_spread_factor,
+            self.gumpf_scale,
+            self.oben_scale,
+            self.unten_scale,
         )
 
 
@@ -75,6 +83,9 @@ def _sample_candidate(rng: random.Random) -> AnnounceParams:
         slalom_base_factor=round(rng.uniform(0.80, 1.05), 2),
         slalom_concentration_factor=rng.randint(0, 4),
         slalom_spread_factor=rng.randint(0, 3),
+        gumpf_scale=round(rng.uniform(0.75, 1.15), 2),
+        oben_scale=round(rng.uniform(0.85, 1.15), 2),
+        unten_scale=round(rng.uniform(0.85, 1.15), 2),
     )
 
 
@@ -88,6 +99,9 @@ def _make_factory(params: AnnounceParams):
             slalom_base_factor=params.slalom_base_factor,
             slalom_concentration_factor=params.slalom_concentration_factor,
             slalom_spread_factor=params.slalom_spread_factor,
+            gumpf_scale=params.gumpf_scale,
+            oben_scale=params.oben_scale,
+            unten_scale=params.unten_scale,
             rng=rng,
         )
     return factory
