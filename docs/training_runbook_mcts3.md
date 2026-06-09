@@ -1,17 +1,24 @@
 # Trainings-Runbook: MCTS-Runde 3 + Heuristik-Tuning (~120 h)
 
 Geführter, schrittweiser Fahrplan zur nächsten Stärke-Iteration. Ziel: die
-beobachteten **kurzsichtigen Fehler** reduzieren. Zwei Quellen, zwei Hebel:
+beobachteten **kurzsichtigen Fehler** reduzieren. Die zugrunde liegenden
+Verbesserungen stecken bereits im Code (mit Tests) und greifen in den Schritten:
 
-1. **Karten-Spiel (NN):** tieferer/besserer MCTS-Lehrer → weniger kurzsichtige
-   Lehrer-Labels. Für Bodensee zusätzlich der **neue Full-Round-Lookahead**
-   (vorher nur 1-Stich → strukturell kurzsichtig).
-2. **Ansage (Heuristik):** Tuning der vier Ansage-Parameter (verbessert den
-   Ansage-Fallback der App; das NN sagt nicht an).
+1. **Karten-Spiel (NN):**
+   - tieferer MCTS-Lehrer (mehr Rollouts → weniger Label-Rauschen);
+   - **void-aware Determinisierung** (Kreuz/Solo, automatisch aktiv): der Lehrer
+     verteilt keine „halluzinierten" Trümpfe mehr an nachweislich blanke Gegner
+     → behebt das sinnlose Austrumpfen (systematischer Bias, kein Rauschen);
+   - **Full-Round-Lookahead für Bodensee** (vorher nur 1-Stich → strukturell
+     kurzsichtig).
+2. **Heuristik (eigener Schwierigkeitsgrad):** void-tracking Trumpf-Disziplin
+   beim Anspielen + optionales Tuning der vier Ansage-Parameter.
 
-Alle Kommandos für **WSL2**, conda-Env `jass-gpu` (außer Schritt 1: reines CPU,
-läuft überall). Nach jedem NN-Schritt ein **Eval-Gate** — es entscheidet
-ehrlich, ob sich der Schritt gelohnt hat.
+GPU-Schritte laufen in einer Umgebung mit TensorFlow + CUDA (z. B. WSL2 mit
+conda). Die CPU-Schritte (Heuristik) brauchen **kein** TensorFlow und laufen auf
+einer beliebigen Maschine — gerne parallel zur GPU-Datengen. Nach jedem
+NN-Schritt ein **Eval-Gate** — es entscheidet ehrlich, ob sich der Schritt
+gelohnt hat.
 
 > **Ehrliche Erwartung:** BC plateauiert beim Lehrer-Niveau; das wird kein
 > Quantensprung. Realistisch: die kurzsichtigen Fehler werden spürbar seltener,
@@ -25,7 +32,7 @@ ehrlich, ob sich der Schritt gelohnt hat.
 | Schritt | Config | Schätzung |
 |---|---|---|
 | 0. Bodensee-Full-Round-Smoke + Kalibrierung | 10 Spiele, 1 Variante | ~5 min |
-| 1. Heuristik-Ansage-Tuning | CPU, ~80 Kandidaten | ~3–6 h |
+| 1. CPU-Nebenspur: Heuristik-Void-Eval + opt. Ansage-Tuning | CPU, beliebige Maschine, parallel | Eval: Minuten · Tuning: 1–6 h |
 | 2. Kreuz mcts3 (60 Rollouts) | 500 Spiele/Var | ~26 h |
 | 3. Solo mcts3 (60 Rollouts) | 500 Spiele/Var | ~36 h |
 | 4. Bodensee mcts3 (**full-round**) | kalibriert (s. Schritt 0) | ~25–35 h |
@@ -62,31 +69,41 @@ Danach `data/_smoke_bodensee_fr` löschen.
 
 ---
 
-## Schritt 1 — Heuristik-Ansage-Tuning (CPU)
+## Schritt 1 — CPU-Nebenspur: Heuristik (beliebige Maschine, parallel)
 
-Optimiert die vier Ansage-Parameter gegen die aktuelle Baseline (paired-eval,
-reines CPU). Übernimmt nur, was statistisch über dem Rauschen liegt.
+Reines CPU, **kein** TensorFlow/numpy — nur Python 3.11+ und das Repo. Läuft auf
+einer beliebigen freien Maschine, gerne parallel zur GPU-Datengen.
+
+**1a) Void-Regel validieren** (misst die Trumpf-Disziplin gegen die Baseline,
+paired-eval; Heuristik-Partien sind billig → wenige Minuten):
+
+```bash
+python -m scripts.eval_heuristic_void_rule --games 8000 --workers 12
+```
+
+**1b) Ansage-Tuning (optional)** — optimiert die vier Ansage-Parameter gegen die
+Baseline. Übernimmt nur, was über dem 2-SD-Rauschen liegt:
 
 ```bash
 python -m scripts.tune_heuristic_announce \
     --games-screen 800 --num-candidates 80 \
     --games-final 6000 --top-k 6 \
     --workers 12 \
-    --output models/heuristic_announce_tuned.json
+    --output heuristic_announce_tuned.json
 ```
 
-→ Melde das Ergebnis. Ist es **signifikant** (> 2 SD über 50 %), übernehme ich
-die Parameter als neue `HeuristicPlayer`-Defaults (verbessert den
-App-Ansage-Fallback). Kein Re-Training der bestehenden Daten nötig. Die
-Partienzahl/Kandidatenzahl darfst du nach der ersten Screening-Zeit-Anzeige
-nach oben/unten drehen.
+→ Signifikante Verbesserungen werden als neue `HeuristicPlayer`-Defaults
+übernommen (stärkerer Heuristik-Gegner + Ansage-Fallback). Diese Spur ist vom
+NN-Training **entkoppelt** — kein Re-Training der NN-Daten nötig.
 
 ---
 
 ## Schritt 2 — Kreuz mcts3
 
 Tieferer Lehrer: **60 statt 30 Rollouts** (halbiert das Determinisierungs-
-Rauschen der Labels). Warm-Start aus dem aktuellen Kreuz-Modell.
+Rauschen) plus die **void-aware Determinisierung** (automatisch aktiv, kein Flag
+nötig — behebt das Trumpf-Ziehen gegen blanke Gegner). Warm-Start aus dem
+aktuellen Kreuz-Modell.
 
 ```bash
 # Datengen (~26 h)
@@ -123,6 +140,8 @@ Deepening gesättigt (mcts2 behalten).
 ---
 
 ## Schritt 3 — Solo mcts3
+
+Wie Kreuz: 60 Rollouts + **void-aware Determinisierung** (automatisch aktiv).
 
 ```bash
 # Datengen (~36 h)
