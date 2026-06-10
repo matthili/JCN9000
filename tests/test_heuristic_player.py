@@ -353,13 +353,16 @@ def test_ansage_slalom_bei_komplementaerer_hand():
     """Hand mit niedrigen Karten (6,7,8) in einer Farbe und hohen (O,K,A) in einer
     anderen sollte Slalom auslösen, weil beide Modi unterstützt werden.
 
-    Mechanismus-Test: Slalom-Parameter explizit gesetzt, damit der Test nicht
-    an den (per Win-Rate getunten, bewusst Slalom-zurückhaltenden) Defaults hängt."""
+    Mechanismus-Test: Slalom-Parameter UND Familien-Skalen explizit gesetzt,
+    damit der Test nicht an den (per Win-Rate getunten) Defaults hängt."""
     bot = HeuristicPlayer(
         "Bot",
         slalom_base_factor=0.95,
         slalom_concentration_factor=2,
         slalom_spread_factor=1,
+        gumpf_scale=1.0,
+        oben_scale=1.0,
+        unten_scale=1.0,
     )
     hand = [
         # F1 = Eichel: 6, 7, 8, 9 (4 Karten, alle unten-stark)
@@ -406,13 +409,16 @@ def test_konzentrierte_hand_bekommt_hoeheren_slalom_score_als_verstreute():
     deutlich höheren Slalom-Score haben als eine Hand mit gleich vielen Karten,
     die aber über alle 4 Farben verstreut sind. Das prüft die Konzentrations-Logik.
 
-    Mechanismus-Test: Konzentrations-Faktor explizit > 0 gesetzt (die getunten
-    Defaults haben ihn auf 0 -- dann wäre die getestete Logik per Default aus)."""
+    Mechanismus-Test: Slalom-Parameter UND Familien-Skalen explizit gesetzt,
+    damit der Test unabhängig von den (per Win-Rate getunten) Defaults bleibt."""
     bot = HeuristicPlayer(
         "Bot",
         slalom_base_factor=0.95,
         slalom_concentration_factor=2,
         slalom_spread_factor=1,
+        gumpf_scale=1.0,
+        oben_scale=1.0,
+        unten_scale=1.0,
     )
 
     # Konzentriert: Eichel = O,K,A + Laub = 6,7,8 + 3 Filler
