@@ -77,7 +77,7 @@ BASELINE = AnnounceParams()
 
 
 def _sample_candidate(rng: random.Random) -> AnnounceParams:
-    """Zufaelliger Kandidat in plausiblen Bereichen rund um die Baseline."""
+    """Zufaelliger Kandidat in plausiblen Bereichen (globale Suche)."""
     return AnnounceParams(
         push_threshold=rng.randint(40, 75),
         slalom_base_factor=round(rng.uniform(0.80, 1.05), 2),
@@ -86,6 +86,31 @@ def _sample_candidate(rng: random.Random) -> AnnounceParams:
         gumpf_scale=round(rng.uniform(0.75, 1.15), 2),
         oben_scale=round(rng.uniform(0.85, 1.15), 2),
         unten_scale=round(rng.uniform(0.85, 1.15), 2),
+    )
+
+
+def _sample_refine_candidate(rng: random.Random) -> AnnounceParams:
+    """Lokale Variation um die Baseline (Hill-Climbing nach globalen Runden).
+
+    Kleine Schritte, aber bewusst weitere Klemm-Grenzen als die globale Suche --
+    falls das Optimum am Rand des alten Suchbereichs lag, kann der Refine-Modus
+    darueber hinaus.
+    """
+    b = BASELINE
+    return AnnounceParams(
+        push_threshold=max(30, min(85, b.push_threshold + rng.randint(-4, 4))),
+        slalom_base_factor=round(
+            max(0.70, min(1.10, b.slalom_base_factor + rng.uniform(-0.05, 0.05))), 2),
+        slalom_concentration_factor=max(0, min(5,
+            b.slalom_concentration_factor + rng.randint(-1, 1))),
+        slalom_spread_factor=max(0, min(4,
+            b.slalom_spread_factor + rng.randint(-1, 1))),
+        gumpf_scale=round(
+            max(0.60, min(1.40, b.gumpf_scale + rng.uniform(-0.08, 0.08))), 2),
+        oben_scale=round(
+            max(0.60, min(1.40, b.oben_scale + rng.uniform(-0.08, 0.08))), 2),
+        unten_scale=round(
+            max(0.60, min(1.40, b.unten_scale + rng.uniform(-0.08, 0.08))), 2),
     )
 
 
@@ -172,6 +197,14 @@ def main():
     parser.add_argument("--target", type=int, default=1000, help="Punkteziel pro Partie.")
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--refine", action="store_true",
+        help=(
+            "Lokale Suche um die Baseline (kleine Schritte, weitere Grenzen) "
+            "statt globaler Zufallssuche. Sinnvoll, nachdem globale Runden das "
+            "Optimum grob lokalisiert haben."
+        ),
+    )
     parser.add_argument("--output", type=Path, default=Path("models/heuristic_announce_tuned.json"))
     args = parser.parse_args()
 
@@ -180,8 +213,9 @@ def main():
         parser.error("--games-screen und --games-final muessen gerade sein (paired-eval).")
 
     rng = random.Random(args.seed)
+    sampler = _sample_refine_candidate if args.refine else _sample_candidate
     # Baseline ist immer Kandidat 0 (Sanity: sollte ~50 % gegen sich selbst geben).
-    candidates = [BASELINE] + [_sample_candidate(rng) for _ in range(args.num_candidates)]
+    candidates = [BASELINE] + [sampler(rng) for _ in range(args.num_candidates)]
 
     sd_screen = _winrate_sd(args.games_screen) * 100
     sd_final = _winrate_sd(args.games_final) * 100

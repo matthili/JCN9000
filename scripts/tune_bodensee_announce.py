@@ -68,6 +68,23 @@ def _sample_candidate(rng: random.Random) -> BodenseeAnnounceParams:
     )
 
 
+def _sample_refine_candidate(rng: random.Random) -> BodenseeAnnounceParams:
+    """Lokale Variation um die Baseline (Hill-Climbing), mit weiteren Grenzen --
+    die letzten Gewinner (oben/unten ~0.89-0.92) lagen nahe der alten
+    Untergrenze 0.85; der Refine-Modus darf bis 0.60 hinunter."""
+    b = BASELINE
+    return BodenseeAnnounceParams(
+        slalom_base_factor=round(
+            max(0.60, min(1.10, b.slalom_base_factor + rng.uniform(-0.05, 0.05))), 2),
+        gumpf_scale=round(
+            max(0.60, min(1.40, b.gumpf_scale + rng.uniform(-0.08, 0.08))), 2),
+        oben_scale=round(
+            max(0.60, min(1.40, b.oben_scale + rng.uniform(-0.08, 0.08))), 2),
+        unten_scale=round(
+            max(0.60, min(1.40, b.unten_scale + rng.uniform(-0.08, 0.08))), 2),
+    )
+
+
 def _make_factory(params: BodenseeAnnounceParams):
     def factory(seat: int, rng: random.Random) -> BodenseeHeuristicPlayer:
         return BodenseeHeuristicPlayer(
@@ -138,6 +155,10 @@ def main():
     parser.add_argument("--target", type=int, default=500)
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--refine", action="store_true",
+        help="Lokale Suche um die Baseline statt globaler Zufallssuche.",
+    )
     parser.add_argument("--output", type=Path, default=Path("bodensee_announce_tuned.json"))
     args = parser.parse_args()
 
@@ -145,7 +166,8 @@ def main():
         parser.error("--games-screen und --games-final muessen gerade sein (paired-eval).")
 
     rng = random.Random(args.seed)
-    candidates = [BASELINE] + [_sample_candidate(rng) for _ in range(args.num_candidates)]
+    sampler = _sample_refine_candidate if args.refine else _sample_candidate
+    candidates = [BASELINE] + [sampler(rng) for _ in range(args.num_candidates)]
 
     sd_screen = math.sqrt(0.25 / args.games_screen) * 100
     sd_final = math.sqrt(0.25 / args.games_final) * 100
