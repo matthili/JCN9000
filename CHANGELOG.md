@@ -4,6 +4,33 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.7.2] / [0.8.2] / [0.9.2] - 2026-06-14 - MCTS-Runde 3: void-aware Determinisierung, Bodensee-Full-Round, getunte Heuristik
+
+Drei parallele Qualitäts-Releases (Kreuz / Solo / Bodensee). Kein Bugfix, sondern eine Stärke-Iteration am MCTS-Lehrer — die Architektur und das Encoding sind unverändert, das finale Modell jeder Spielart wurde mit Warm-Start aus dem v0.x.1-Modell auf neuen, besseren Lehrer-Daten trainiert.
+
+### Hinzugefügt / Geändert
+
+- **Void-aware Determinisierung** ([`jass_engine/void_inference.py`](jass_engine/void_inference.py), [`training/data/determinization.py`](training/data/determinization.py)): Der MCTS-Lehrer verteilt unbekannte Karten nicht mehr rein zufällig, sondern leitet aus der Stichhistorie ab, welche Karten ein Sitz beweisbar nicht halten kann (Nicht-Trumpf-Lead + dritte Farbe abgeworfen → blank in Lead-Farbe; Trumpf-Lead + Nicht-Trumpf → blank in Trumpf außer Buur). Behebt einen **systematischen Bias** (sinnloses Trumpf-Ziehen gegen blanke Gegner), nicht nur Rauschen. Wirkt für Kreuz und Solo.
+- **Bodensee Full-Round-Lookahead** ([`training/data/bodensee_vectorized_lookahead.py`](training/data/bodensee_vectorized_lookahead.py)): ersetzt den bisherigen 1-Stich-Lookahead. Der Lehrer spielt pro Karte die gesamte Restrunde aus (vektorisiert, mit Forced-Move-Abkürzung) — behebt die strukturelle Kurzsichtigkeit aller bisherigen Bodensee-Modelle. Neues `--lookahead-mode {single-trick,full-round}`.
+- **60 statt 30 Rollouts/Karte** (Kreuz/Solo) — halbiert das Determinisierungs-Rauschen der Labels.
+- **Getunte Heuristik-Ansage** für alle drei Spielarten ([`scripts/tune_heuristic_announce.py`](scripts/tune_heuristic_announce.py), `tune_solo_announce.py`, `tune_bodensee_announce.py`): neue Parameter inkl. Familien-Skalen (`gumpf/oben/unten_scale`). Kumulierte paired-eval-Gewinne gegen die jeweilige Vorgänger-Heuristik: Kreuz +5,6 pp (über 3 Iterationen), Solo +1,1 pp, Bodensee +1,9 pp. Durchgängiger Befund: Gumpf war zu zaghaft angesagt (`gumpf_scale` > 1). Betrifft den „Heuristik"-Schwierigkeitsgrad + Ansage-Fallback, **nicht** die NN-Datengen.
+- **Trumpf-Disziplin der Heuristik** ([`players/heuristic_player.py`](players/heuristic_player.py)): zieht beim Anspielen keine Trümpfe mehr, wenn beide Gegner beweisbar trumpffrei sind (`trump_void_awareness`, Default an). Beweisbar sound; Effekt gegen die Heuristik-Baseline gemessen ~0 pp (selten relevant), aber korrektes Spiel.
+- **Model-Cards** [`v0.7.2`](docs/model_cards/v0.7.2.md) / [`v0.8.2`](docs/model_cards/v0.8.2.md) / [`v0.9.2`](docs/model_cards/v0.9.2.md).
+
+### Spielstärke (paired-eval)
+
+| Variante | vs. eigenes mcts2-Vorläufermodell | vs. (getunte) Heuristik |
+|---|---|---|
+| Kreuz (v0.7.2) | **57,9 %** (6000 Partien, ~12 SD) | **83,5 %** (4000) |
+| Solo (v0.8.2) | **46,8 %** vs 40,3 % (4000; bedingt 53,7 %, ~4,4 SD) | **78,8 %** (4000) |
+| Bodensee (v0.9.2) | **92,4 %** (8000, ~140 SD) | **96,8 %** (4000) |
+
+Bodensee ist der Headline-Sprung: Der Full-Round-Lehrer sprengt das Plateau des 1-Stich-Lehrers (mcts2 schlug seinen Vorläufer nur mit 53,0 %). Die „vs. Heuristik"-Zahlen messen gegen eine **stärkere** (getunte) Heuristik als die v0.x.1-Werte — die Verbesserungen sind real größer als die nackten Differenzen. Hinweis: Bei Bodensee ist die Heuristik als Messlatte gesättigt (96,8 %); der nächste aussagekräftige Test ist menschliches Spiel.
+
+### Encoder / Web-App
+
+Keine Encoder-Änderung (Kreuz/Solo: 3.0.0; Bodensee: bodensee_1.0.0, Fixtures unverändert) — die void-aware Determinisierung und der Full-Round-Lookahead betrafen nur die Datengen, nicht den Encoder oder die Modell-API. Neue TF.js-Modelle sind reine Gewichts-Austausche. Der getunte Heuristik-Gegner sollte, falls in TypeScript portiert, mit übernommen werden.
+
 ## [0.7.1] / [0.8.1] / [0.9.1] - 2026-05-31 - Legal-Moves-Fix, komplettes Re-Training, Lizenzwechsel auf AGPL-3.0
 
 Drei parallele Punkt-Releases (Kreuz / Solo / Bodensee), gemeinsam geschnitten nach einem kritischen Engine-Fix. Architektur und Encoding unverändert; alle Trainingsdaten gegen die korrigierte Engine neu erzeugt.
