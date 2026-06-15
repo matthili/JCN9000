@@ -7,7 +7,7 @@
 
 ## Kurzfassung
 
-Im NN-Repository (`matthili/jass-neuronales-netz`) ist **v0.9.1** veroeffentlicht
+Im NN-Repository (`matthili/JCN9000`) ist **v0.9.1** veroeffentlicht
 -- ein Punkt-Release ueber v0.9.0 fuer **Bodensee-Jass** (2 Spieler,
 Tisch-Mechanik). **Vier** Aenderungen, drei davon aktiv auf der App-Seite:
 
@@ -74,7 +74,7 @@ erwartet und wird durch das Fixture-Update behoben.
 
 Code und Modellgewichte stehen ab v0.9.1 unter **AGPL-3.0-or-later** mit
 §7(b)-Attributionspflicht (Ursprung nennen:
-`Based on "Jass-NN" by Matthias, https://github.com/matthili/jass-neuronales-netz`).
+`Based on "Jass-NN" by Matthias, https://github.com/matthili/JCN9000`).
 Kommerzielle Nutzung erlaubt; bei Netzwerkbetrieb (AGPL §13) muss die modifizierte
 Version offengelegt werden. Da die App selbst AGPL-3.0 wird: kongruent.
 `LICENSE` liegt im Release-ZIP.
@@ -84,7 +84,7 @@ Version offengelegt werden. Da die App selbst AGPL-3.0 wird: kongruent.
 ## 4. Neue Gewichte herunterladen
 
 ```bash
-gh release download v0.9.1 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.9.1 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.9.1.zip
 ```
 
@@ -126,7 +126,7 @@ Variante 67-82 %, staerkste: Unten (81.8 %), schwaechste: Trumpf Schelle (67.1 %
 
 ## Fragen oder Mismatches
 
-Issues im NN-Repo: <https://github.com/matthili/jass-neuronales-netz/issues>.
+Issues im NN-Repo: <https://github.com/matthili/JCN9000/issues>.
 Pflicht-Aufwand: der gemeinsame `legal_moves`-Fix (einmal fuer alle Spielarten)
 **plus** das Bodensee-Fixture-Update (Punkt 2). Encoder-Struktur und Modell-API
 sind unveraendert.

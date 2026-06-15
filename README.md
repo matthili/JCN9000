@@ -252,7 +252,7 @@ python -m scripts.build_release_zip --version v0.1.0-full `
     --output dist/jass-nn-v0.1.0-full.zip
 
 # An das bestehende Release anhängen
-gh release upload v0.1.0 dist/jass-nn-v0.1.0-full.zip --repo matthili/jass-neuronales-netz
+gh release upload v0.1.0 dist/jass-nn-v0.1.0-full.zip --repo matthili/JCN9000
 ```
 
 ### Wie die Web-App das Release nutzt
@@ -262,7 +262,7 @@ Im Build-Schritt der Web-Anwendung (z.B. in einer GitHub-Actions-Pipeline):
 ```bash
 # ZIP des gepinnten Releases herunterladen
 gh release download v0.1.0 \
-    --repo matthili/jass-neuronales-netz \
+    --repo matthili/JCN9000 \
     --pattern "jass-nn-*.zip"
 
 # Auspacken in einen festen Pfad

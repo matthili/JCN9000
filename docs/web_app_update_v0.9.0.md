@@ -7,7 +7,7 @@
 
 ## Kurzfassung
 
-Im NN-Repository (`matthili/jass-neuronales-netz`) ist Release **v0.9.0**
+Im NN-Repository (`matthili/JCN9000`) ist Release **v0.9.0**
 veroeffentlicht. Es bringt ein **eigenes Modell fuer Bodensee-Jass** -- die
 2-Spieler-Variante mit Tisch-Mechanik.
 
@@ -43,7 +43,7 @@ Vollstaendige Engine-Referenz: `jass_engine/bodensee/` im NN-Repo.
 ## Was herunterladen
 
 ```bash
-gh release download v0.9.0 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.9.0 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.9.0.zip
 ```
 
@@ -129,6 +129,6 @@ Spielstaerke gegen erfahrene menschliche Bodensee-Jasser.
 
 ## Fragen oder Mismatches
 
-Issues im NN-Repo: <https://github.com/matthili/jass-neuronales-netz/issues>.
+Issues im NN-Repo: <https://github.com/matthili/JCN9000/issues>.
 Der groesste Integrations-Aufwand ist der neue Bodensee-Encoder im TypeScript-
 Port -- `bodensee_state_encoding.md` ist dafuer die maßgebliche Referenz.

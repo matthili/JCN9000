@@ -25,7 +25,7 @@ import zipfile
 from pathlib import Path
 
 
-DEFAULT_REPO = "matthili/jass-neuronales-netz"
+DEFAULT_REPO = "matthili/JCN9000"
 
 
 # Defensive Stubs fuer tensorflow_decision_forests + Yggdrasil-Decision-Forests.

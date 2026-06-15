@@ -23,7 +23,7 @@ Qualitaets-Update **ohne Pflicht-Arbeit**:
 ## 1. Neues Modell (Pflicht, trivial)
 
 ```bash
-gh release download v0.8.2 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.8.2 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.8.2.zip
 ```
 
@@ -78,5 +78,5 @@ Solider Schritt ueber v0.8.1 (gegen die jetzt staerkere Heuristik gemessen).
 
 ## Fragen
 
-Issues: <https://github.com/matthili/jass-neuronales-netz/issues>. Aufwand: ein
+Issues: <https://github.com/matthili/JCN9000/issues>. Aufwand: ein
 Modell-Austausch.

@@ -19,7 +19,7 @@ Sicherheits-Flags:
     --dry-run          alles bis Schritt 5, kein Tag, kein Push, kein Release
     --skip-tests       Tests ueberspringen (NICHT empfohlen)
     --yes              alle Bestaetigungs-Prompts mit Ja beantworten
-    --gh-repo OWNER/REPO  Repository angeben (Default: matthili/jass-neuronales-netz)
+    --gh-repo OWNER/REPO  Repository angeben (Default: matthili/JCN9000)
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from typing import Sequence
 from scripts.build_release_zip import build_zip
 
 
-DEFAULT_REPO = "matthili/jass-neuronales-netz"
+DEFAULT_REPO = "matthili/JCN9000"
 VERSION_PATTERN = re.compile(r"^v\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$")
 
 
@@ -246,7 +246,7 @@ Dies ist eine versionierte Veroeffentlichung der Vorarlberger Kreuz-Jass NN-Pipe
 
 ```bash
 # Asset herunterladen
-gh release download """ + version + """ --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download """ + version + """ --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-""" + version + """.zip
 ```
 """

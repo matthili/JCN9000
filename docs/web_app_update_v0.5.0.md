@@ -6,7 +6,7 @@
 
 ## Worum geht's
 
-Im NN-Repository (`matthili/jass-neuronales-netz`) gibt es ein neues Release **v0.5.0**. Das bringt drei Dinge mit, die in der Web-App eingebaut werden müssen:
+Im NN-Repository (`matthili/JCN9000`) gibt es ein neues Release **v0.5.0**. Das bringt drei Dinge mit, die in der Web-App eingebaut werden müssen:
 
 1. **Encoder bumped auf v3.0.0** (Featurevektor 348 → 421 Dims, neue Sections, 5-dim Mode-Feld)
 2. **Neue Spielvariante: Gumpf** (Trumpf-Farbe wie normaler Trumpf, Nicht-Trumpf-Farben mit invertierter Stärke)
@@ -21,7 +21,7 @@ Im NN-Repository (`matthili/jass-neuronales-netz`) gibt es ein neues Release **v
 ```bash
 # Release-Asset herunterladen (ZIP enthält alle Artefakte)
 gh release download v0.5.0 \
-    --repo matthili/jass-neuronales-netz \
+    --repo matthili/JCN9000 \
     --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.5.0.zip
 ```

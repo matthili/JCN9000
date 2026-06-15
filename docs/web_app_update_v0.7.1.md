@@ -7,7 +7,7 @@
 
 ## Kurzfassung
 
-Im NN-Repository (`matthili/jass-neuronales-netz`) ist **v0.7.1** veroeffentlicht
+Im NN-Repository (`matthili/JCN9000`) ist **v0.7.1** veroeffentlicht
 -- ein Punkt-Release ueber v0.7.0 fuer **Kreuz-Jass** (4 Spieler, Teams ueber
 Kreuz). Drei Dinge haben sich geaendert, zwei davon sind **aktiv auf der
 App-Seite umzusetzen**:
@@ -63,7 +63,7 @@ Funktion `legal_moves`. Testfaelle: `tests/test_rules.py`
 Das NN-Repo (Code **und** Modellgewichte) steht ab v0.7.1 unter
 **AGPL-3.0-or-later** mit einer Zusatzklausel nach §7(b): jede modifizierte
 Version muss in ihren sichtbaren rechtlichen Hinweisen den Ursprung nennen
-(`Based on "Jass-NN" by Matthias, https://github.com/matthili/jass-neuronales-netz`).
+(`Based on "Jass-NN" by Matthias, https://github.com/matthili/JCN9000`).
 
 Was das fuer die App bedeutet:
 - Kommerzielle Nutzung ist erlaubt.
@@ -82,7 +82,7 @@ MIT. Ab v0.7.1 gilt AGPL.)
 ## 3. Neue Gewichte herunterladen
 
 ```bash
-gh release download v0.7.1 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.7.1 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.7.1.zip
 ```
 
@@ -122,6 +122,6 @@ der nun korrekt groesseren legalen Zugmenge. Staerkste Modi: Slalom Unten
 
 ## Fragen oder Mismatches
 
-Issues im NN-Repo: <https://github.com/matthili/jass-neuronales-netz/issues>.
+Issues im NN-Repo: <https://github.com/matthili/JCN9000/issues>.
 Der einzige Pflicht-Aufwand auf der App-Seite ist der `legal_moves`-Fix (Punkt 1);
 Encoder und Modell-API sind unveraendert.

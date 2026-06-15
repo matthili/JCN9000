@@ -24,7 +24,7 @@ made available to users over a network -- must preserve the following author
 attribution in its "Appropriate Legal Notices":
 
         Based on "Jass-NN" by Matthias
-        https://github.com/matthili/jass-neuronales-netz
+        https://github.com/matthili/JCN9000
 
 This attribution requirement applies to the source code, to the trained model
 weights, and to any artifacts derived from either of them.

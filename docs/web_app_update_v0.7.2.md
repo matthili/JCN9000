@@ -7,7 +7,7 @@
 
 ## Kurzfassung -- entspannt diesmal
 
-Im NN-Repository (`matthili/jass-neuronales-netz`) ist **v0.7.2** veroeffentlicht
+Im NN-Repository (`matthili/JCN9000`) ist **v0.7.2** veroeffentlicht
 (Kreuz-Jass). Im Gegensatz zu v0.7.1 ist das ein **reines Qualitaets-Update ohne
 Pflicht-Arbeit auf der App-Seite**:
 
@@ -25,7 +25,7 @@ getunt -- nur relevant, falls ihr die Heuristik in TypeScript nachgebaut habt
 ## 1. Neues Modell (Pflicht, aber trivial)
 
 ```bash
-gh release download v0.7.2 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.7.2 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.7.2.zip
 ```
 
@@ -98,5 +98,5 @@ Matsch-Rate steigt auf 6,48 %: Das Modell fegt jetzt oefter alle 9 Stiche weg.
 
 ## Fragen
 
-Issues im NN-Repo: <https://github.com/matthili/jass-neuronales-netz/issues>.
+Issues im NN-Repo: <https://github.com/matthili/JCN9000/issues>.
 Aufwand auf eurer Seite: **ein Modell-Austausch**, sonst nichts Verpflichtendes.

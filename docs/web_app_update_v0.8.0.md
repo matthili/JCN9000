@@ -7,7 +7,7 @@
 
 ## Kurzfassung
 
-Im NN-Repository (`matthili/jass-neuronales-netz`) ist Release **v0.8.0** veroeffentlicht.
+Im NN-Repository (`matthili/JCN9000`) ist Release **v0.8.0** veroeffentlicht.
 Das ist ein **eigenes Modell fuer Solo-Jass** (4 Spieler, jeder gegen jeden).
 
 **Wichtig:** v0.8.0 **ersetzt nicht** v0.7.0. v0.7.0 ist fuer Kreuz-Jass (Team-Spiel)
@@ -39,7 +39,7 @@ gewaehlten Spielart das passende Modell laden.
 ## Was herunterladen
 
 ```bash
-gh release download v0.8.0 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.8.0 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.8.0.zip
 ```
 
@@ -182,6 +182,6 @@ fuehrt sie pro Variante auf.
 
 ## Fragen oder Mismatches
 
-Issues bitte im NN-Repo melden (<https://github.com/matthili/jass-neuronales-netz/issues>).
+Issues bitte im NN-Repo melden (<https://github.com/matthili/JCN9000/issues>).
 Beim Encoder-Sanity-Test (Fixtures) sollte nichts abweichen, da derselbe Encoder
 wie bei v0.7.0 verwendet wird.

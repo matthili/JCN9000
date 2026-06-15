@@ -22,7 +22,7 @@ Pflicht-Arbeit ausser dem Modell-Austausch**:
 ## 1. Neues Modell (Pflicht, trivial)
 
 ```bash
-gh release download v0.9.2 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.9.2 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.9.2.zip
 ```
 
@@ -86,6 +86,6 @@ Stiche zuerst kassieren, +5 im letzten Stich mitnehmen) sollten jetzt sauber sei
 
 ## Fragen
 
-Issues: <https://github.com/matthili/jass-neuronales-netz/issues>. Aufwand: ein
+Issues: <https://github.com/matthili/JCN9000/issues>. Aufwand: ein
 Modell-Austausch -- und dann am besten ein paar Partien selbst spielen, denn das
 ist bei dieser Spielstaerke die letzte echte Pruefinstanz.

@@ -6,7 +6,7 @@
 
 ## Kurzfassung
 
-Im NN-Repository (`matthili/jass-neuronales-netz`) ist Release **v0.7.0** veroeffentlicht. Es ersetzt v0.6.0 als Produktiv-Modell.
+Im NN-Repository (`matthili/JCN9000`) ist Release **v0.7.0** veroeffentlicht. Es ersetzt v0.6.0 als Produktiv-Modell.
 
 **Was sich geaendert hat:**
 1. **Spielstaerke deutlich hoeher** (77.2 % Win-Rate gegen v0.5.0 in 4000 gepaarten Partien)
@@ -25,7 +25,7 @@ Im besten Fall: ZIP herunterladen, austauschen, fertig.
 ## Was herunterladen
 
 ```bash
-gh release download v0.7.0 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.7.0 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.7.0.zip
 ```
 
@@ -116,4 +116,4 @@ Avg. 1025 zu 829 Punkte pro Partie. Matsch-Rate dreimal so hoch wie bei v0.5.0 (
 
 ## Fragen oder Mismatches
 
-Issues bitte im NN-Repo melden (<https://github.com/matthili/jass-neuronales-netz/issues>). Bei Encoder-Drift zuerst den Fixture-Test pruefen -- der zeigt sofort, wo das TS-Encoding vom Python-Encoding abweicht.
+Issues bitte im NN-Repo melden (<https://github.com/matthili/JCN9000/issues>). Bei Encoder-Drift zuerst den Fixture-Test pruefen -- der zeigt sofort, wo das TS-Encoding vom Python-Encoding abweicht.

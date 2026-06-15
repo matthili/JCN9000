@@ -7,7 +7,7 @@
 
 ## Kurzfassung
 
-Im NN-Repository (`matthili/jass-neuronales-netz`) ist **v0.8.1** veroeffentlicht
+Im NN-Repository (`matthili/JCN9000`) ist **v0.8.1** veroeffentlicht
 -- ein Punkt-Release ueber v0.8.0 fuer **Solo-Jass** (4 Spieler, jeder gegen
 jeden). Drei Aenderungen, zwei davon aktiv auf der App-Seite umzusetzen:
 
@@ -59,7 +59,7 @@ unterscheiden sich, das betrifft `legal_moves` nicht.
 
 Code und Modellgewichte stehen ab v0.8.1 unter **AGPL-3.0-or-later** mit
 §7(b)-Attributionspflicht (Ursprung nennen:
-`Based on "Jass-NN" by Matthias, https://github.com/matthili/jass-neuronales-netz`).
+`Based on "Jass-NN" by Matthias, https://github.com/matthili/JCN9000`).
 Kommerzielle Nutzung erlaubt; bei Netzwerkbetrieb (AGPL §13) muss die modifizierte
 Version offengelegt werden. Da die App selbst AGPL-3.0 wird: kongruent, kein
 Konflikt. `LICENSE` liegt im Release-ZIP.
@@ -69,7 +69,7 @@ Konflikt. `LICENSE` liegt im Release-ZIP.
 ## 3. Neue Gewichte herunterladen
 
 ```bash
-gh release download v0.8.1 --repo matthili/jass-neuronales-netz --pattern "jass-nn-*.zip"
+gh release download v0.8.1 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
 unzip jass-nn-v0.8.1.zip
 ```
 
@@ -109,6 +109,6 @@ Sehr gleichmaessig ueber die Varianten (~68-84 %). Slalom kommt im Solo nicht vo
 
 ## Fragen oder Mismatches
 
-Issues im NN-Repo: <https://github.com/matthili/jass-neuronales-netz/issues>.
+Issues im NN-Repo: <https://github.com/matthili/JCN9000/issues>.
 Pflicht-Aufwand: der gemeinsame `legal_moves`-Fix (einmal fuer alle Spielarten);
 Encoder und Modell-API sind unveraendert.
