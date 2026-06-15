@@ -1,307 +1,184 @@
-# Jass Neuronales Netz
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jcn9000-logo-dark.png">
+    <img alt="JCN9000" src="docs/assets/jcn9000-logo-light.png" width="460">
+  </picture>
+</p>
 
-**Vorarlberger Jass** (Kreuz-, Solo- und Bodensee-Jass) als regelgetreue Python-Engine plus neuronale Netze als KI-Gegner. Erzeugt versionierte Artefakte (Modell + Regel-Spezifikation), die in einer separaten Web-Anwendung als Multiplayer-Plattform eingebunden werden können.
+<p align="center"><strong>JCN9000 — the artificial Jass intelligence.</strong><br>
+A neural-network card-play AI for Vorarlberg <em>Jass</em>, in three variants.</p>
 
-[![Tests](https://img.shields.io/badge/tests-142%20passing-brightgreen)](#verifikation)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](#voraussetzungen)
-[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
+<p align="center"><strong>English</strong> · <a href="README.de.md">Deutsch</a></p>
 
-**Aktuelle Modelle (AGPL-3.0):** [Kreuz v0.7.1](docs/model_cards/v0.7.1.md) · [Solo v0.8.1](docs/model_cards/v0.8.1.md) · [Bodensee v0.9.1](docs/model_cards/v0.9.1.md) — MCTS-augmentiertes Behavioral Cloning. Win-Rate gegen die jeweilige Heuristik: 79.5 % / 77.2 % / 77.8 % (paired-eval, je 1000 Partien).
+<p align="center">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue"></a>
+  <img alt="Tests" src="https://img.shields.io/badge/tests-284%20passing-brightgreen">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue">
+  <img alt="Model" src="https://img.shields.io/badge/model-TensorFlow%20%E2%86%92%20TF.js-orange">
+</p>
 
-## Inhaltsverzeichnis
+---
 
-- [Was steckt drin?](#was-steckt-drin)
-- [Voraussetzungen](#voraussetzungen)
-- [Setup](#setup)
-- [Schnellstart](#schnellstart)
-- [Verifikation](#verifikation)
-- [Architektur](#architektur)
-- [Schnittstelle zur Web-Anwendung](#schnittstelle-zur-web-anwendung)
-- [Roadmap](#roadmap)
-- [Lizenz](#lizenz)
+JCN9000 learns to play **Vorarlberg Jass** — the Alemannic trick-taking card game —
+at a level far beyond any rule-based bot. It is trained in Python/TensorFlow and
+shipped as a small TensorFlow.js model that runs in the browser as the AI opponent
+of the separate web app *"Heb ab!"*.
 
-## Was steckt drin?
+Three game variants, each its own model:
 
-| Komponente | Bedeutung |
+- **Kreuz-Jass** — 4 players, two teams across the table.
+- **Solo-Jass** — 4 players, every player for themselves.
+- **Bodensee-Jass** — 2 players, with the table-card mechanic (hand + visible + hidden table cards, 18 tricks).
+
+## Table of contents
+
+- [How well does it play?](#how-well-does-it-play)
+- [Why "JCN9000"?](#why-jcn9000)
+- [What's inside](#whats-inside)
+- [How it learns](#how-it-learns)
+- [Architecture](#architecture)
+- [Quickstart](#quickstart)
+- [Web-app integration](#web-app-integration)
+- [Documentation](#documentation)
+- [License](#license)
+
+## How well does it play?
+
+Current models (release `v0.7.2` / `v0.8.2` / `v0.9.2`), measured with paired
+evaluation (mirrored seats + identical deals, so card luck cancels out):
+
+| Variant | Model | vs. heuristic opponent | vs. own previous model |
+|---|---|---|---|
+| Kreuz | [v0.7.2](docs/model_cards/v0.7.2.md) | **83.5 %** | 57.9 % |
+| Solo | [v0.8.2](docs/model_cards/v0.8.2.md) | **78.8 %** | 46.8 % (4-player table) |
+| Bodensee | [v0.9.2](docs/model_cards/v0.9.2.md) | **96.8 %** | 92.4 % |
+
+The heuristic itself is a strong, hand-tuned rule-based player — and JCN9000 beats
+it decisively in every variant. For Bodensee the heuristic is effectively
+*saturated*: it loses almost every game, so human play is now the only meaningful
+benchmark left.
+
+> All numbers are honest, reproducible paired-eval results — see each model card
+> for the per-variant breakdown, sample sizes, and known weaknesses.
+
+## Why "JCN9000"?
+
+In Kubrick's *2001: A Space Odyssey*, the computer **HAL** is widely read as
+**IBM** shifted back by one letter (H→I, A→B, L→M). Take one more step forward and
+you get **JCN** — *Jass Computer Neuronennetz*. The `9000` is the obvious homage.
+And HAL's own canonical expansion — *"Heuristically programmed ALgorithmic
+computer"* — is uncannily on point: this project literally grew from a
+**heuristic**, through an **algorithmic** Monte-Carlo search, into a **neural**
+network.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jcn9000-animation-dark.png">
+    <img alt="HAL → IBM → JCN: each letter shifted forward by one" src="docs/assets/jcn9000-animation-light.png" width="620">
+  </picture>
+</p>
+
+(It is, for the record, not a bot — it's a neural network. And unlike HAL, it would
+much rather play Jass than open the pod bay doors.)
+
+## What's inside
+
+| Component | What it does |
 |---|---|
-| **Spielengine** ([`jass_engine/`](jass_engine/)) | 36 Karten, alle Varianten (Trumpf / **Gumpf** / Bock / Geiss / Slalom), Weisen, Stöcke, Matsch, Schieben — 100 % regelgetreu |
-| **Heuristik-Bot** ([`players/heuristic_player.py`](players/heuristic_player.py)) | Stechen, Schmieren, Sparen, Variant-Scoring; ~99 % Sieg gegen Random |
-| **Trainings-Pipeline** ([`training/`](training/)) | State-Encoder v3.0.0 (421 Dims), Datengenerator (~500 Partien/s mit 20 Workern), Keras-Modell (768/768/384), Shard-Streaming-Training, RL/Self-Play-Stack ([`training/rl/`](training/rl/)) |
-| **NN-Player** ([`players/nn_player.py`](players/nn_player.py)) | Lädt ein trainiertes Modell und spielt damit |
-| **Eval** ([`evaluation/`](evaluation/)) | Sequenziell mit Elo, oder parallel über N CPU-Worker (`--workers 16` → 2000 Partien in ~19 min) |
-| **Visualisierung** ([`visualization/`](visualization/)) | Rich-basierte Terminal-Demo und Streamlit-App zur interaktiven Regel-Verifikation |
-| **Regel-Spezifikation** ([`spec/`](spec/)) | Versionierte JSON-Spec (1.2.0) + Encoder-Doku (3.0.0) + Test-Fixtures als Schnittstelle für die Web-Anwendung |
-| **Test-Suite** ([`tests/`](tests/)) | 142 Tests: Regeln (inkl. Gumpf), Weisen, Heuristik, Encoder, RL-Stack, Spec-Konsistenz |
+| **Game engine** ([`jass_engine/`](jass_engine/)) | 36 cards, all variants (Trumpf / Gumpf / Oben / Unten / Slalom), Weisen, Stöcke, Matsch, pushing — rule-accurate, with a dedicated Bodensee module |
+| **Heuristic bot** ([`players/heuristic_player.py`](players/heuristic_player.py)) | Strong rule-based player: stechen / schmieren / sparen + tuned announcement scoring. Ships as the app's "Medium" opponent |
+| **Training pipeline** ([`training/`](training/)) | State encoders (v3.0.0 = 421-dim, bodensee_1.0.0 = 291-dim), MCTS-augmented data generation, Keras MLP (768/768/384), shard-streaming training |
+| **MCTS teacher** ([`training/data/`](training/data/)) | Determinized Monte-Carlo lookahead with void-aware card distribution; full-round lookahead for Bodensee |
+| **NN player** ([`players/nn_player.py`](players/nn_player.py)) | Loads a trained model and plays greedily over the legal-move mask |
+| **Evaluation** ([`evaluation/`](evaluation/)) | paired-eval, batched-GPU inference, per-variant win rates, Elo |
+| **Interface spec** ([`spec/`](spec/)) | Versioned rule JSON + encoder docs + test fixtures — the contract for the TypeScript port |
+| **Tests** ([`tests/`](tests/)) | 284 passing: rules, Weisen, heuristic, encoders, void inference, eval, spec consistency |
 
-## Voraussetzungen
+## How it learns
 
-- **Python 3.11+** (getestet auf 3.13)
-- Optional für Training: **NVIDIA-GPU mit CUDA** (auf Windows nur über WSL2 oder DirectML; CPU-Training funktioniert problemlos)
-- ~10 GB freier Speicher für 50k generierte Trainingsdaten
+JCN9000 is trained by **MCTS-augmented behavioral cloning**, iterated over several
+rounds:
 
-## Setup
+1. **Teacher.** For every position, a determinized Monte-Carlo lookahead plays many
+   hypothetical continuations and picks the card with the best expected outcome.
+   The *thinking* lives here — and it is the expensive part (hours of GPU time per
+   round).
+2. **Student.** A compact MLP (~1.25 M weights) is trained to imitate the teacher's
+   choices. The student generalizes far past a lookup table — it distills millions
+   of search-derived decisions into a function that answers in milliseconds.
+3. **Iterate.** Each round warm-starts from the previous model, so the teacher's
+   rollouts get more realistic and the labels get better. The current models are
+   the result of three such rounds.
 
-```powershell
-# 1. Repository klonen
-git clone https://github.com/<your-user>/jass-neuronales-netz.git
-cd jass-neuronales-netz
+Two ideas from the latest round are worth calling out, because they fix mistakes a
+human player would recognise:
 
-# 2. Virtuelles Environment
-python -m venv .venv
-.venv\Scripts\activate   # Windows
-# source .venv/bin/activate   # Linux/macOS
+- **Void-aware determinization** (Kreuz/Solo): the teacher no longer "hallucinates"
+  trumps in opponents who are provably out of trump — so the AI stops pointlessly
+  pulling trumps against void opponents.
+- **Full-round lookahead** (Bodensee): the teacher now plans the *whole* remaining
+  round instead of a single trick — fixing the endgame myopia (e.g. discarding a
+  junk card first and *then* taking the last trick for its +5 bonus).
 
-# 3. Installation
-pip install -e ".[dev]"           # nur Engine + Tools
-pip install -e ".[dev,training]"  # plus TensorFlow für Training/Inferenz
-```
+## Architecture
 
-## Schnellstart
+![System architecture](docs/diagrams/system_overview.png)
 
-### Terminal-Demo: eine komplette Partie zwischen Random-Bots
+Full write-up with both diagrams: **[Architecture](docs/architecture.md)**
+(sources in [`docs/diagrams/`](docs/diagrams/)). In short: the Python engine feeds
+the heuristic and the MCTS teacher, which generate training shards; Keras trains
+the MLP; the model is exported to TensorFlow.js and published as a GitHub release
+asset that the web app consumes.
 
-```powershell
-python -m visualization.terminal
-```
-
-### Spielstärke-Vergleich
-
-```powershell
-python -m evaluation.compare_players --games 500
-```
-
-Erwartete Ausgabe: Heuristik ≈ 99 % vs. Random; ~50/50 Heuristik vs. Heuristik (Sitz-Symmetrie).
-
-### Streamlit-Regelprüfer (interaktiv)
-
-```powershell
-streamlit run visualization/streamlit_app.py
-```
-
-Vier Seiten:
-- **Regelwerk**: Karten, Werte, Reihenfolge je Variante
-- **Regelprüfer**: Hand + Stich-Karten eingeben → erlaubte/verbotene Karten mit Begründung
-- **Weis-Prüfer**: Sequenzen, Vierlinge, Stöcke aus einer Hand erkennen
-- **Demo-Partie**: Random-vs-Random-Spiel Schritt für Schritt
-
-### Trainingsdaten generieren
-
-```powershell
-# 50 000 Partien mit 20 parallelen Workern (ca. 2:20 Minuten auf 14700K)
-python -m training.generate_data --games 50000 --workers 20 --output data/heuristic_50k
-```
-
-### Modell trainieren
-
-```powershell
-python -m training.train --data data/heuristic_50k --output models/v1 --epochs 20
-```
-
-Auf einer CPU dauern 20 Epochen ca. 30–40 Minuten; auf einer GPU einen Bruchteil davon.
-
-## Verifikation
-
-Die Engine ist über Tests abgesichert. Bei jeder Code-Änderung:
-
-```powershell
-pytest
-```
-
-Aktuell **142 Tests grün**, verteilt auf:
-
-- `test_card.py` — Karten, Deck, Weli-Identifikation
-- `test_rules.py` — Werte, Reihenfolgen, legale Züge je Variante (Trumpf, Gumpf, Oben/Unten, Slalom)
-- `test_weis.py` — Sequenzen, Vierlinge, Stöcke, Team-Vergleich
-- `test_heuristic_player.py` — Schmier-/Spar-/Stech-Verhalten, Ansage-Logik, Slalom
-- `test_kreuz_jass.py` — End-to-End-Spielablauf, Konsistenz, Matsch
-- `test_encoder.py` — 421-dim Featurevektor, legale Aktionsmaske
-- `test_evaluation.py` — Elo, paired-eval, Stats-Aggregation
-- `test_model_value_head.py` — Value-Head-Roundtrip
-- `test_rl.py` — Reinforcement-Learning-Stack
-- `test_spec_consistency.py` — Spec-Drift gegen Python-Konstanten, Fixture-Reproduzierbarkeit
-
-## Architektur
-
-![System-Architektur](docs/diagrams/system_overview.png)
-
-Die Quell-Datei für das Diagramm liegt unter [`docs/diagrams/system_overview.puml`](docs/diagrams/system_overview.puml). Ein weiteres Diagramm zur Inferenz-Server-Architektur des `batched-gpu`-Modus findet sich in [`docs/diagrams/inference_server.puml`](docs/diagrams/inference_server.puml) bzw. dem [Diagramm-Übersichts-Dokument](docs/diagrams/README.md).
-
-Schnellüberblick zusätzlich als ASCII:
-
-```
-                ┌────────────────────────────────────┐
-                │  Python-Engine (jass_engine/)      │
-                │  - Karten, Deck                    │
-                │  - Variant (Trumpf/Bock/...)       │
-                │  - Regeln (legale Züge, Stiche)    │
-                │  - Weisen, Stöcke, Matsch          │
-                └─────────────┬──────────────────────┘
-                              │
-        ┌─────────────────────┼──────────────────────┐
-        │                     │                      │
-        ▼                     ▼                      ▼
-┌──────────────┐   ┌────────────────────┐   ┌──────────────┐
-│ RandomPlayer │   │ HeuristicPlayer    │   │ NNPlayer     │
-│              │   │ - Score je Variant │   │ - lädt .keras│
-│              │   │ - Stechen/Schmieren│   │              │
-└──────┬───────┘   └─────────┬──────────┘   └──────┬───────┘
-       │                     │                     │
-       └──────────┬──────────┘                     │
-                  │                                │
-                  ▼                                │
-    ┌──────────────────────────────┐               │
-    │ Datengenerator               │               │
-    │ training/generate_data.py    │               │
-    │ → .npz-Shards (state/mask/y) │               │
-    └──────────┬───────────────────┘               │
-               │                                   │
-               ▼                                   │
-    ┌──────────────────────────────┐               │
-    │ Keras-Training               │               │
-    │ training/train.py            │               │
-    │ → models/v*/best.keras       │───────────────┘
-    └──────────────────────────────┘
-                  │
-                  ▼
-    ┌──────────────────────────────┐
-    │ TF.js-Export                 │
-    │ tensorflowjs_converter       │
-    │ → GitHub Release Asset       │
-    └──────────────────────────────┘
-                  │
-                  ▼
-    ┌──────────────────────────────┐
-    │  Separates Web-App-Projekt   │
-    │  (NestJS + React/Angular)    │
-    │  importiert Modell + Spec    │
-    └──────────────────────────────┘
-```
-
-## Schnittstelle zur Web-Anwendung
-
-Die Web-Anwendung ist ein **separates Projekt**. Dieses Repository liefert ihr drei Artefakte:
-
-| Artefakt | Pfad | Zweck |
-|---|---|---|
-| **Regel-Spezifikation** | [`spec/jass_rules.json`](spec/jass_rules.json) | Alle Spielregeln deklarativ in JSON |
-| **JSON-Schema** | [`spec/jass_rules.schema.json`](spec/jass_rules.schema.json) | Validiert die Spec-Datei beim Lesen |
-| **Encoder-Doku** | [`spec/state_encoding.md`](spec/state_encoding.md) | 421-dim Featurevektor-Layout für das NN |
-| **Test-Fixtures** | [`spec/fixtures/encoding_fixtures.json`](spec/fixtures/encoding_fixtures.json) | (State → Vektor)-Paare zum Verifizieren des TS-Ports |
-| **Trainiertes Modell** | (nicht im Repo) | TF.js-Modell, als GitHub-Release-Asset |
-
-**Versionierung**: Jede Release-Version dieses Repos versioniert alle vier Artefakte gemeinsam. Die Web-App pinnt eine konkrete Version im Build-Prozess und prüft beim Modell-Laden, dass die Encoding-Version kompatibel ist.
-
-**Konsistenz-Garantie**: Die Spec-Dateien werden aus den Python-Konstanten **generiert**:
-
-```powershell
-python -m scripts.generate_jass_rules_json
-python -m scripts.generate_encoding_fixtures
-```
-
-Die CI-Pipeline (siehe [`.github/workflows/test.yml`](.github/workflows/test.yml)) verifiziert, dass die committeten Spec-Dateien synchron mit dem Code sind — Drift ist strukturell ausgeschlossen.
-
-## Ein neues Release veröffentlichen
-
-Ein "Release" ist im GitHub-Sinne eine **versionierte, eingefrorene Veröffentlichung** dieses Projekts, an die eine herunterladbare ZIP-Datei angehängt wird. Diese ZIP-Datei (im englischen Sprachgebrauch "Asset" = "Anhang") enthält alles, was die separate Web-Anwendung braucht: Regel-Spezifikation, Encoder-Doku, Test-Fixtures und das trainierte Modell. Über eine feste URL kann die Web-App genau diese ZIP-Datei beim Build herunterladen.
-
-### Voraussetzungen einmalig
-
-- **GitHub-CLI** installieren: <https://cli.github.com/>
-- Einmal anmelden: `gh auth login`
-- **TF.js-Konvertierung läuft auf GitHub-Actions**, nicht lokal — siehe [`add_tfjs.yml`](.github/workflows/add_tfjs.yml). Auf Windows/WSL2 mit modernem Python ist die lokale Installation von `tensorflowjs` eine Dependency-Hölle, deshalb wurde sie bewusst auf einen Ubuntu-Runner ausgelagert.
-
-### Release in einem Befehl
-
-Lokal ein Modell trainieren, dann:
+## Quickstart
 
 ```bash
-# WSL2 — empfohlen, weil das Skript Spec-Regen ausführt und in WSL2-Pfaden auch
-# in Windows-Pfaden konsistente Zeilenenden produziert
-python -m scripts.make_release --version v0.1.0 --model models/v1/best.keras --tfjs-dir models/v1/tfjs
+git clone https://github.com/matthili/JCN9000.git
+cd JCN9000
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"            # engine + tools (no TensorFlow)
+pip install -e ".[dev,training]"   # add TensorFlow for training / inference
 ```
-
-Das Skript:
-
-1. **Vorprüfung**: working tree sauber, richtiger Branch (`master`), Tag noch frei, `gh` angemeldet
-2. **Tests laufen lassen**
-3. **Spec-Drift prüfen**: `spec/`-Dateien werden neu generiert und müssen unverändert sein
-4. **TF.js-Export versuchen** (lokal): meist nicht installiert — Skript bricht nicht ab, sondern lädt das ZIP ohne TF.js hoch und überlässt das dem Workflow
-5. **ZIP bauen** mit allen Artefakten + MANIFEST.json (SHA256-Hashes)
-6. **Bestätigung abwarten** — bis hierhin wurde nichts an GitHub gesendet
-7. **Git-Tag erstellen und pushen**
-8. **GitHub-Release erstellen** und ZIP als Anhang anhängen
-
-Nach Schritt 8 läuft automatisch der Workflow `add_tfjs.yml`: er lädt das ZIP herunter, konvertiert das Keras-Modell auf einem Ubuntu-Runner nach TF.js, hängt das `tfjs/`-Verzeichnis dran und ersetzt das Asset (`--clobber`). Dauert 3-5 Minuten.
-
-### Trockenlauf (zum Testen)
-
-```powershell
-python -m scripts.make_release --version v0.1.0 --dry-run
-```
-
-Macht Schritte 1–5, baut das ZIP unter `dist/`, **erstellt aber keinen Tag und kein Release**. Gut zum Anschauen, ob das ZIP so aussieht, wie es soll.
-
-### Nachträglich Assets anhängen
-
-Wenn du nach einem Release zum Beispiel ein noch besser trainiertes Modell als zusätzlichen Anhang zur Verfügung stellen willst:
-
-```powershell
-# Lokal ein zweites ZIP bauen, z.B. mit anderem Namen
-python -m scripts.build_release_zip --version v0.1.0-full `
-    --model models/v2/best.keras --tfjs-dir models/v2/tfjs `
-    --output dist/jass-nn-v0.1.0-full.zip
-
-# An das bestehende Release anhängen
-gh release upload v0.1.0 dist/jass-nn-v0.1.0-full.zip --repo matthili/JCN9000
-```
-
-### Wie die Web-App das Release nutzt
-
-Im Build-Schritt der Web-Anwendung (z.B. in einer GitHub-Actions-Pipeline):
 
 ```bash
-# ZIP des gepinnten Releases herunterladen
-gh release download v0.1.0 \
-    --repo matthili/JCN9000 \
-    --pattern "jass-nn-*.zip"
-
-# Auspacken in einen festen Pfad
-unzip jass-nn-v0.1.0.zip -d external/jass-nn/
+python -m visualization.terminal              # watch a full game in the terminal
+python -m evaluation.compare_players --games 500   # heuristic vs. random sanity check
+streamlit run visualization/streamlit_app.py  # interactive rule checker
+pytest -q                                     # 284 tests
 ```
 
-Anschließend liegen `jass_rules.json`, `state_encoding.md`, `tfjs/model.json` usw. unter `external/jass-nn/jass-nn-v0.1.0/` bereit. Die Web-App referenziert diese Dateien direkt.
+Training and evaluation commands per variant are in the model cards and the
+[training runbook](docs/training_runbook_mcts3.md). Models were trained on an
+RTX 3060 (12 GB).
 
-Damit hat die Web-App **eine einzige, versionierte Quelle** für Spielregeln und Modell. Aktualisieren bedeutet nur, im Build-Skript die Versionsnummer zu erhöhen — keine kopierten Dateien, kein Drift.
+## Web-app integration
 
-## Roadmap
+The trained model ships as a TensorFlow.js bundle inside each GitHub release ZIP,
+alongside the rule spec and encoder fixtures:
 
-- [x] Spielengine mit allen Varianten
-- [x] Heuristik-Bot mit Schmieren/Sparen/Stechen
-- [x] Trainings-Pipeline (Encoder, Datengenerator, MLP, Trainings-Loop)
-- [x] NN-Player auf Augenhöhe mit Heuristik (Behavioral Cloning, v0.5.0)
-- [x] Schnittstellen-Spec für separate Web-App
-- [x] TF.js-Export via GitHub-Actions (`add_tfjs.yml`)
-- [x] Reinforcement Learning (Self-Play) — Versuch abgeschlossen, PPO auf BC-Plateau bringt unter unseren Bedingungen keine stärkere Politik. Lehre: AlphaZero-Stil mit MCTS bei Inferenz wäre der nächste Versuch.
-- [x] **MCTS-augmentiertes Behavioral Cloning** (v0.7.0) — 77.2 % Win-Rate gegen v0.5.0
-- [ ] Mensch-vs-Modell-Validierung (20-30 Partien gegen erfahrene Vorarlberger Jasser)
-- [ ] MCTS-Phase 3 mit v0.7.0 als Lehrer-Init für nächsten Sprung
-- [ ] Echter MCTS-bei-Inferenz (AlphaZero-Architektur, kostet Latenz)
-- [ ] Steigern-Variante (Bieter-Jass)
-- [ ] Bodensee-Jass (2 Spieler) und 6-Spieler-Kreuz-Jass
+```bash
+gh release download v0.9.2 --repo matthili/JCN9000 --pattern "jass-nn-*.zip"
+```
 
-## Lizenz
+- **Encoder versions:** `3.0.0` (Kreuz/Solo, 421-dim) and `bodensee_1.0.0`
+  (Bodensee, 291-dim). The web app loads the model matching the chosen variant via
+  the `team_mode` field in `MANIFEST.json`.
+- **Model API:** `{state, mask}` → `{policy, value}`. Announcement and Weisen are
+  handled by the heuristic, not the NN.
+- Per-release integration notes for the app team live in
+  `docs/web_app_update_v*.md`.
 
-[AGPL-3.0-or-later](LICENSE) — frei nutzbar, **auch kommerziell**. Bedingung
-(Copyleft): Wer den Code oder das Modell verändert und weitergibt **oder als
-Netzwerkdienst betreibt**, muss seine Version unter derselben AGPL offenlegen
-und den Ursprung nennen (Attributionspflicht nach §7(b), siehe
-[`LICENSE`](LICENSE)). Diese Bedingungen gelten auch für die ausgelieferten
-Modellgewichte.
+## Documentation
 
-Der Autor betreibt die separate Web-App „Heb ab!" unter eigenen Rechten.
+- [Architecture](docs/architecture.md) — components, data flow, diagrams
+- [Model cards](docs/model_cards/) — one per release: data, training, evaluation, weaknesses
+- [Rules](docs/regeln.md) and [glossary](docs/glossar.md) — Vorarlberg Jass, in depth
+- [Training runbook](docs/training_runbook_mcts3.md) — the step-by-step recipe
+- [Changelog](CHANGELOG.md)
 
-## Quellen für die Spielregeln
+## License
 
-- [jassa.at/regeln](https://jassa.at/regeln/) — Grundregeln Vorarlberger Jass
-- [Mohrenbrauerei FAQ](https://www.mohrenbrauerei.at/biererlebniswelt/community/haeufig-gestellte-fragen-faq/) — Weis-Tabelle
-- [jasskarten.at/jassregeln](https://www.jasskarten.at/jassregeln) — Sonderregeln (Bock/Geiss/Slalom)
+[AGPL-3.0-or-later](LICENSE) with a §7(b) attribution clause. Commercial use is
+allowed; modifications — including when run as a network service — must be shared
+under the AGPL and must credit the origin. The clause applies to the model weights
+as well. The author runs the separate "Heb ab!" web app under their own rights.

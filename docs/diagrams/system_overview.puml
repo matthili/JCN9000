@@ -1,8 +1,8 @@
 @startuml system_overview
-' Gesamt-Architektur: vom Code im NN-Repo bis zur Web-App im Browser.
-' Rendern: plantuml -tpng docs/diagrams/system_overview.puml
+' Gesamt-Architektur / system architecture: vom Code im Repo bis zur Web-App.
+' Rendern: java -DPLANTUML_LIMIT_SIZE=16384 -jar plantuml.jar docs/diagrams/system_overview.puml
 
-title Jass-NN -- Gesamt-Architektur
+title JCN9000 -- system architecture
 
 skinparam backgroundColor #FAFAFA
 skinparam defaultFontName "Helvetica"
@@ -18,56 +18,57 @@ skinparam rectangle {
   BorderColor #555555
 }
 
-rectangle "**Spiel-Engine**\n(jass_engine/)\n* 36 Karten, 12 Varianten\n* Regeln, Stiche, Weisen\n* Schieben, Matsch" <<engine>> as engine
+rectangle "**Game engine**\n(jass_engine/)\n* 36 cards, all variants\n* Kreuz / Solo / Bodensee\n* rules, tricks, Weisen, Matsch" <<engine>> as engine
 
 rectangle "RandomPlayer" <<player>> as random
-rectangle "**HeuristicPlayer**\n* Schmieren, Sparen, Stechen\n* Trumpf-Ansage" <<player>> as heuristic
-rectangle "NNPlayer\n* laedt .keras\n* greedy choose_card" <<player>> as nn
+rectangle "**HeuristicPlayer**\n* stechen / schmieren / sparen\n* tuned announcement\n* ships as \"Medium\" opponent" <<player>> as heuristic
+rectangle "**NNPlayer x3**\n* one model per variant\n* loads .keras / TF.js\n* greedy over legal mask" <<player>> as nn
 
-rectangle "**MCTS-augmentierte\nDatengen**\n(training/data/)\n* generate_mcts_data_mp.py\n* Multiprocessing + GPU-Sharing\n* ~2.4M Samples" <<training>> as datagen
-rectangle "**Behavioral-Cloning-\nTraining**\n(training/train.py)\n* MLP 768/768/384\n* Adam, Shard-Streaming" <<training>> as train
-rectangle "**Eval**\n(evaluation/run_eval.py)\n* sequential / cpu-workers /\n  batched-gpu\n* paired-eval optional\n* Elo + Win-Rate-Stats" <<training>> as eval
+rectangle "**MCTS teacher + datagen**\n(training/data/)\n* determinized lookahead\n* void-aware distribution\n* full-round (Bodensee)\n* ~2M samples / round" <<training>> as datagen
+rectangle "**Behavioral cloning**\n(training/train.py)\n* MLP 768/768/384\n* warm-start, 3 rounds\n* shard streaming" <<training>> as train
+rectangle "**Evaluation**\n(evaluation/)\n* paired-eval\n* batched-gpu inference\n* win-rate + Elo" <<training>> as eval
 
-rectangle "**make_release.py**\n* Tests + Spec-Drift\n* ZIP-Bau mit MANIFEST\n* gh release create" <<release>> as makerelease
-rectangle "**GitHub-Actions:\nadd_tfjs.yml**\n* Ubuntu-Runner\n* tensorflowjs-Konversion\n* ZIP-Asset --clobber" <<release>> as actions
-rectangle "**GitHub-Release**\n* Tag v0.x.0\n* ZIP-Asset mit\n  Keras + TF.js + Spec" <<release>> as release
+rectangle "**make_release.py**\n* tests + spec-drift\n* ZIP with MANIFEST\n* gh release create" <<release>> as makerelease
+rectangle "**GitHub Actions:\nadd_tfjs.yml**\n* Ubuntu runner\n* TensorFlow.js convert\n* ZIP asset --clobber" <<release>> as actions
+rectangle "**GitHub release**\n* tag v0.x.2\n* ZIP: Keras + TF.js + spec" <<release>> as release
 
-rectangle "**Web-App** (separates Repo)\n* NestJS + Frontend\n* TF.js-Inferenz im Browser\n* Lebende Multiplayer-Plattform" <<external>> as webapp
+rectangle "**Web app** (separate repo)\n* \"Heb ab!\"\n* TF.js inference in browser\n* live multiplayer platform" <<external>> as webapp
 
 engine --> random
 engine --> heuristic
 engine --> nn
 
-heuristic --> datagen : "Lehrer-Init\n(Phase 1)"
-nn --> datagen : "Lehrer-Init\n(Phase 2)"
-datagen --> train : "Shards (.npz)"
-train --> nn : "models/v0.7.0/best.keras"
+heuristic --> datagen : "announces +\nbootstrap teacher"
+nn --> datagen : "warm-start teacher\n(rounds 1-3)"
+datagen --> train : "shards (.npz)"
+train --> nn : "models/<variant>_mcts3/best.keras"
 
 nn --> eval
-heuristic --> eval
+heuristic --> eval : "baseline"
 
 train --> makerelease : "best.keras"
-makerelease --> release : "ZIP ohne TF.js +\nrelease-notes.md"
+makerelease --> release : "ZIP (no TF.js) +\nrelease notes"
 release --> actions : "release:published"
-actions --> release : "ZIP mit TF.js\n(--clobber)"
+actions --> release : "ZIP with TF.js\n(--clobber)"
 
 release --> webapp : "gh release download"
 
 note right of datagen
-  Pro Spielposition:
-  * Determinisierung der
-    unsichtbaren Karten
-  * 30 Rollouts pro legaler Karte
-  * Karte mit hoechstem
-    Mittel-Score = Lehrer-Aktion
+  Per position, the teacher plays
+  many determinized rollouts and
+  picks the highest expected-score
+  card as the training label.
+  Void-aware: never deals trumps to
+  provably void opponents.
+  Bodensee plans the whole round,
+  not just one trick.
 end note
 
 note right of actions
-  TF.js-Konversion laeuft auf
-  Ubuntu, weil tensorflowjs auf
-  Windows/Python 3.13 nicht sauber
-  installiert. Linux-Runner kann
-  Python 3.12 + tensorflowjs >=4.22.
+  TF.js conversion runs on Ubuntu --
+  tensorflowjs is hard to install on
+  Windows/Python 3.13. The Linux
+  runner uses Python 3.12.
 end note
 
 @enduml

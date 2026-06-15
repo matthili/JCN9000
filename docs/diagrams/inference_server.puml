@@ -1,7 +1,7 @@
 @startuml inference_server
 ' Inferenz-Server-Architektur: wie batched-gpu im Eval und in der
 ' MCTS-Datengen viele parallele Spiele auf eine GPU buendelt.
-' Rendern: plantuml -tpng docs/diagrams/inference_server.puml
+' Rendern: java -DPLANTUML_LIMIT_SIZE=16384 -jar plantuml.jar docs/diagrams/inference_server.puml
 
 title batched-gpu: Game-Threads, Inferenz-Server, GPU
 

@@ -5,22 +5,20 @@ liegt nach dem Rendern ein gleichnamiges `.png` daneben.
 
 ## Rendern
 
-PlantUML-CLI installieren (Java erforderlich) und im Repo-Root:
+Java + `plantuml.jar` (hier unter `C:\Tools\PlantUML\`), im Repo-Root:
 
 ```bash
-# Einzeln
-plantuml -tpng docs/diagrams/system_overview.puml
-plantuml -tpng docs/diagrams/inference_server.puml
-
 # Alle auf einmal
-plantuml -tpng docs/diagrams/*.puml
+java -DPLANTUML_LIMIT_SIZE=16384 -jar plantuml.jar -tpng docs/diagrams/*.puml
+
+# Einzeln
+java -DPLANTUML_LIMIT_SIZE=16384 -jar plantuml.jar -tpng docs/diagrams/system_overview.puml
 ```
 
-Auf Windows alternativ ueber das offizielle JAR:
-
-```powershell
-java -jar plantuml.jar -tpng docs\diagrams\*.puml
-```
+Das `-DPLANTUML_LIMIT_SIZE=16384` hebt die Standard-Bildgroessengrenze an, damit
+groessere Diagramme nicht abgeschnitten werden. Ein Pre-Commit-Hook
+([`scripts/git-hooks/pre-commit`](../../scripts/git-hooks/pre-commit)) rendert
+geaenderte `.puml` automatisch mit.
 
 ## Inhalt
 
