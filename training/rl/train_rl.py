@@ -1,5 +1,12 @@
 """RL-Hauptschleife: Self-Play -> Trajektorien-Sammlung -> PPO-Update -> Snapshot.
 
+[INAKTIV] Archiviertes Experiment (Stand Juni 2026): Dieser PPO/RL-Self-Play-
+Pfad ist NICHT Teil der aktuellen Pipeline. Die ausgelieferten Modelle entstehen
+per MCTS-augmentiertem Behavioral Cloning, nicht per Reinforcement Learning.
+Code + Tests (tests/test_rl.py) bleiben als dokumentiertes Experiment erhalten.
+Hinweis: der live genutzte Teil von training/rl/ ist allein
+batched_selfplay.InferenceServer (von MCTS-Datengen + Eval verwendet).
+
 Aufruf:
     # Erster Lauf -- startet aus dem BC-Warmstart-Modell (Default: v5)
     python -m training.rl.train_rl --warm-start models/v5/best.keras \

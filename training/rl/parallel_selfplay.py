@@ -1,5 +1,9 @@
 """Parallel-Self-Play: persistent worker pool mit weight-sync via Queue.
 
+[INAKTIV] Teil des archivierten PPO/RL-Experiments -- siehe
+training/rl/train_rl.py. Nicht in der aktuellen MCTS-BC-Pipeline; bleibt
+getestet erhalten.
+
 Architektur:
     Hauptprozess (GPU, PPO-Update)              Worker 0..N-1 (CPU, Self-Play)
     -----------------------------------          -----------------------------------

@@ -1,5 +1,9 @@
 """PPO-Update-Schritt fuer das Policy+Value-Modell.
 
+[INAKTIV] Teil des archivierten PPO/RL-Experiments -- siehe
+training/rl/train_rl.py. Nicht in der aktuellen MCTS-BC-Pipeline; bleibt
+getestet erhalten.
+
 Klassisches PPO mit Clipped-Surrogate-Objective:
     L_policy  = -E[ min( r * A, clip(r, 1-eps, 1+eps) * A ) ]
     L_value   = MSE( returns, V(state) )         [optional auch clipped]
