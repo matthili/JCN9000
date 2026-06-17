@@ -6,7 +6,7 @@ Inhalt des ZIPs:
     ├── LICENSE                    AGPL-3.0 + §7(b)-Attribution (gilt auch fuer die Gewichte)
     ├── jass_rules.json            Vollständige Regel-Spezifikation
     ├── jass_rules.schema.json     JSON-Schema zur Validierung
-    ├── state_encoding.md          Encoder-Doku (132-dim Featurevektor)
+    ├── state_encoding.md          Encoder-Doku (State-Featurevektor)
     ├── encoding_fixtures.json     (state → vector)-Test-Fixtures
     ├── tfjs/
     │   ├── model.json             TensorFlow.js-Modell-Beschreibung
@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import shutil
 import sys
 import zipfile
 from datetime import datetime, timezone

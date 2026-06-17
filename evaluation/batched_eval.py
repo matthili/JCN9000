@@ -21,11 +21,9 @@ Limitation:
 from __future__ import annotations
 
 import random
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 
@@ -34,7 +32,7 @@ from evaluation.stats import TeamStats, update_stats_from_game
 from evaluation.tournament import TournamentResult
 from jass_engine.game import GameResult
 from jass_engine.player import GameState, Player
-from jass_engine.variants.kreuz_jass import KREUZ_JASS_TEAMS, play_kreuz_jass
+from jass_engine.variants.kreuz_jass import play_kreuz_jass
 from players.heuristic_player import HeuristicPlayer
 from players.random_player import RandomPlayer
 from training.encoder import encode_state, index_to_card, legal_action_mask

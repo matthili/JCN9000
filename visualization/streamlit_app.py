@@ -32,7 +32,7 @@ from jass_engine.rules import (
     legal_moves,
 )
 from jass_engine.trick import Trick
-from jass_engine.variant import Announcement, PlayMode, Variant
+from jass_engine.variant import PlayMode, Variant
 from jass_engine.variants.kreuz_jass import KREUZ_JASS_TEAMS
 from jass_engine.weis import find_weise, has_stoecke, stoecke_weis
 from players.random_player import RandomPlayer

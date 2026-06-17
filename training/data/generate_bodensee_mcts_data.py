@@ -29,20 +29,12 @@ from pathlib import Path
 import numpy as np
 
 from jass_engine.bodensee.deal import (
-    HAND_SIZE,
     NUM_PLAYERS,
-    TABLE_STACKS,
-    TRICKS_PER_ROUND,
-    deal_bodensee,
-    find_weli_holder_bodensee,
 )
 from jass_engine.bodensee.player_state import BodenseePlayerState
 from jass_engine.bodensee.rules import legal_moves_bodensee
 from jass_engine.bodensee.state import BodenseeGameState
-from jass_engine.bodensee.trick import play_bodensee_trick
 from jass_engine.card import Card, Suit
-from jass_engine.rules import MATCH_BONUS
-from jass_engine.trick import CompletedTrick
 from jass_engine.variant import Announcement, Variant
 from players.bodensee_heuristic_player import BodenseeHeuristicPlayer
 from players.bodensee_player import BodenseePlayer

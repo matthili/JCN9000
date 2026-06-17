@@ -35,7 +35,6 @@ import numpy as np
 from jass_engine.card import Card
 from jass_engine.player import GameState
 from jass_engine.rules import legal_moves, trick_points, trick_winner
-from jass_engine.variant import Variant
 from training.data.determinization import determinize_hands
 from training.encoder import encode_state, index_to_card, legal_action_mask
 from training.rl.batched_selfplay import InferenceServer

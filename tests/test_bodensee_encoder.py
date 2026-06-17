@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from jass_engine.bodensee.player_state import BodenseePlayerState, TableStack
+from jass_engine.bodensee.player_state import TableStack
 from jass_engine.bodensee.state import BodenseeGameState
 from jass_engine.card import Card, Rank, Suit
 from jass_engine.trick import CompletedTrick

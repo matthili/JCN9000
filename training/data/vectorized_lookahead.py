@@ -27,14 +27,13 @@ Vereinfachungen gegenueber der echten Engine:
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
 from jass_engine.card import Card
 from jass_engine.player import GameState
 from jass_engine.rules import (
-    LAST_TRICK_BONUS,
     MATCH_BONUS,
     legal_moves,
     trick_points,

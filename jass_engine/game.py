@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from jass_engine.deck import deal, find_weli_holder
 from jass_engine.player import Player
 from jass_engine.round import RoundResult, play_round
 

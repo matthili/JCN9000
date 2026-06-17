@@ -44,7 +44,7 @@ from players.forced_announcement_player import ForcedAnnouncementPlayer
 from players.heuristic_player import HeuristicPlayer
 from training.data.mcts_lookahead import mcts_lookahead_best_card
 from training.data.vectorized_lookahead import compute_card_scores_vectorized
-from training.encoder import ACTION_DIM, INPUT_DIM, encode_state, legal_action_mask
+from training.encoder import encode_state, legal_action_mask
 from training.rl.batched_selfplay import InferenceServer
 
 

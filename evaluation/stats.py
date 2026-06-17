@@ -121,15 +121,12 @@ def update_stats_from_game(
     if score_a > score_b:
         stats_a.games_won += 1
         stats_b.games_lost += 1
-        winner = team_a_id
     elif score_b > score_a:
         stats_b.games_won += 1
         stats_a.games_lost += 1
-        winner = team_b_id
     else:
         stats_a.games_drawn += 1
         stats_b.games_drawn += 1
-        winner = None
 
     # Pro Runde: Matsch-Statistik + Variant-Win-Rate
     # "Wer hat den Matsch gemacht" -> direkt aus RoundResult ablesbar.

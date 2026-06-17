@@ -48,13 +48,9 @@ import numpy as np
 from jass_engine.bodensee.player_state import BodenseePlayerState, TableStack
 from jass_engine.bodensee.rules import legal_moves_bodensee
 from jass_engine.bodensee.state import BodenseeGameState
-from jass_engine.card import ALL_RANKS, ALL_SUITS, Card, Rank, Suit
-from jass_engine.rules import card_value
-from jass_engine.variant import PlayMode, Variant
+from jass_engine.card import Card, Suit
+from jass_engine.variant import PlayMode
 from training.encoder import (
-    MAX_CARD_STRENGTH,
-    MAX_CARD_VALUE,
-    _card_strength_feature,
     _value_strength_arrays,
     card_index,
     index_to_card,

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from jass_engine.card import Card, Rank, Suit
-from jass_engine.variant import PlayMode, Variant
+from jass_engine.variant import Variant
 
 
 class WeisKind(Enum):

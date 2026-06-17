@@ -107,7 +107,7 @@ def main():
         print(f"  {names[i]}:")
         print(f"    Hand (nur fuer {names[i]} sichtbar):")
         print(f"      {fmt_cards(ps.hand)}")
-        print(f"    Tisch (beide Spieler sehen die sichtbaren, '?' = verdeckt):")
+        print("    Tisch (beide Spieler sehen die sichtbaren, '?' = verdeckt):")
         print(f"      {fmt_table(ps)}")
         print()
 

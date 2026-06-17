@@ -17,7 +17,6 @@ from typing import Callable
 from jass_engine.bodensee.player_state import BodenseePlayerState
 from jass_engine.bodensee.rules import card_source, legal_moves_bodensee
 from jass_engine.card import Card
-from jass_engine.rules import trick_points, trick_winner
 from jass_engine.trick import Trick
 from jass_engine.variant import Variant
 

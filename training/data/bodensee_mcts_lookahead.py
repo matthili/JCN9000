@@ -29,7 +29,6 @@ from jass_engine.bodensee.rules import legal_moves_bodensee
 from jass_engine.bodensee.state import BodenseeGameState
 from jass_engine.card import Card
 from jass_engine.rules import trick_points, trick_winner
-from jass_engine.variant import Variant
 from training.bodensee_encoder import (
     encode_state_bodensee,
     index_to_card,

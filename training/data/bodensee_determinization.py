@@ -147,8 +147,6 @@ def determinize_bodensee_states(
     # ist dem MCTS-Aufrufer nicht bekannt. Fuer die Rollouts ist es genug,
     # dass die Karten in IRGENDeiner gueltigen Anordnung vorliegen.
     opp_rebuilt = BodenseePlayerState(hand=list(opp_hand))
-    # Wir bauen genau so viele Stapel wie noetig: max(visible_count, total_with_hidden)
-    n_stacks = max(len(opp_visible_table), opp_hidden_count, 1)
     # Mindestens len(opp_visible_table) + (opp_hidden_count - was bereits visible-Stapel ist)
     # Einfacher: opp_hidden_count Hidden-Karten verteilen wir auf den letzten
     # opp_hidden_count Stapel-Positionen (mit oder ohne sichtbare).

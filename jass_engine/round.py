@@ -13,7 +13,7 @@ from jass_engine.rules import (
     total_points_per_round,
 )
 from jass_engine.trick import CompletedTrick, Trick
-from jass_engine.variant import Announcement, PlayMode
+from jass_engine.variant import Announcement
 from jass_engine.weis import (
     TeamWeisResult,
     Weis,

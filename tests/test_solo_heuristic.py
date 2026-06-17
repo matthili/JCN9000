@@ -11,13 +11,12 @@ from __future__ import annotations
 
 import random
 
-import pytest
 
 from jass_engine.card import Card, Rank, Suit
 from jass_engine.player import GameState
 from jass_engine.rules import legal_moves
 from jass_engine.variant import Announcement, Variant
-from jass_engine.variants.solo_jass import SOLO_JASS_TEAMS, play_solo_jass
+from jass_engine.variants.solo_jass import play_solo_jass
 from players.solo_heuristic_player import SoloHeuristicPlayer
 
 

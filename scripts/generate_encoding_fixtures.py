@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 
 from jass_engine.card import Card, Rank, Suit
 from jass_engine.player import GameState

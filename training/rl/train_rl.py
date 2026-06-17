@@ -40,7 +40,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
-from training.encoder import ACTION_DIM, INPUT_DIM
 from training.model import MaskBias, build_model  # noqa: F401 (MaskBias-Registrierung)
 from training.rl.batched_selfplay import collect_trajectories_batched
 from training.rl.parallel_selfplay import ParallelSelfPlayPool
@@ -314,7 +313,7 @@ def run(
         f"Letzte Iteration: {end_iter - 1}. "
         f"Stand: {output_dir / 'final.keras'}"
     )
-    print(f"  Weitermachen: nochmal denselben Aufruf -- Resume passiert automatisch.")
+    print("  Weitermachen: nochmal denselben Aufruf -- Resume passiert automatisch.")
 
 
 def main():

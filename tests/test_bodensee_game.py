@@ -9,10 +9,8 @@ import pytest
 from jass_engine.bodensee.deal import TRICKS_PER_ROUND
 from jass_engine.bodensee.game import (
     DEFAULT_BODENSEE_TARGET_SCORE,
-    play_bodensee_game,
 )
 from jass_engine.bodensee.round import play_bodensee_round
-from jass_engine.rules import MATCH_BONUS
 from jass_engine.variants.bodensee_jass import play_bodensee_jass
 from players.bodensee_heuristic_player import BodenseeHeuristicPlayer
 from players.bodensee_random_player import BodenseeRandomPlayer

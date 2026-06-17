@@ -136,7 +136,7 @@ def main():
         # 3. Pruefen, ob TF.js bereits vorhanden
         tfjs_dir = release_dir / "tfjs"
         if tfjs_dir.exists() and any(tfjs_dir.iterdir()):
-            print(f"[3/6] TF.js-Verzeichnis ist bereits im ZIP enthalten. Nichts zu tun.")
+            print("[3/6] TF.js-Verzeichnis ist bereits im ZIP enthalten. Nichts zu tun.")
             return
 
         # 4. Keras-Modell suchen

@@ -204,7 +204,7 @@ def export_tfjs_if_missing(model_path: Path, tfjs_dir: Path) -> bool:
 def create_and_push_tag(version: str, repo: str):
     info(f"Erstelle Tag {version}...")
     run(["git", "tag", "-a", version, "-m", f"Release {version}"])
-    info(f"Pushe Tag nach origin...")
+    info("Pushe Tag nach origin...")
     run(["git", "push", "origin", version])
     ok(f"Tag {version} ist auf GitHub.")
 
@@ -221,7 +221,7 @@ def create_github_release(version: str, zip_path: Path, repo: str, notes_path: P
     ok(f"Release {version} veroeffentlicht: https://github.com/{repo}/releases/tag/{version}")
 
 
-def write_release_notes(version: str, manifest: dict, model_meta_path: Path) -> Path:
+def write_release_notes(version: str, manifest: dict) -> Path:
     has_model = manifest.get("has_model", False)
     spec_version = manifest.get("spec_version", "?")
     encoding_version = manifest.get("encoding_version", "?")
@@ -349,7 +349,7 @@ def main():
     )
 
     # --- Schritt 6: Release-Notes ---
-    notes_path = write_release_notes(version, manifest, args.model)
+    notes_path = write_release_notes(version, manifest)
     info(f"Release-Notes geschrieben: {notes_path}")
 
     if args.dry_run:

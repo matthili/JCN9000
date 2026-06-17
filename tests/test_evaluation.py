@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import random
 
-import pytest
 
 from evaluation.elo import DEFAULT_K, DEFAULT_RATING, EloRating
 from evaluation.stats import TeamStats, update_stats_from_game

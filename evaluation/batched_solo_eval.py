@@ -27,8 +27,6 @@ import numpy as np
 from evaluation.solo_eval import (
     ROLE_A,
     ROLE_B,
-    ROLE_H1,
-    ROLE_H2,
     SoloEvalResult,
     _random_seat_assignment,
     _seat_assignment,
