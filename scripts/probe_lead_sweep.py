@@ -12,14 +12,18 @@ und misst pro Modus (Definitionen symmetrisch, damit Unten/Oben fair vergleichba
              (Unten: 6/7, Oben: Ass/Koenig). Hoch = Policy konzentriert auf gute Karten.
   badmass    mittlere Masse auf dem schwaechsten Rang (Unten: Ass, Oben: 6). Niedrig = gut.
   mean_top1  mittlere Top-1-Wahrscheinlichkeit ueber legale Karten (Roh-Schaerfe).
+  agree_Heur % der Stellungen, in denen das NN-argMax die Karte des (deterministischen,
+             domaenenkorrekten) HeuristicPlayer trifft.
 
-Erwartung, falls die Vermutung stimmt: OBEN scharf/sauber, UNTEN weicher und mit
-hoeherer blunder-/badmass-Rate  =>  Schwaeche in den invertierten Modi belegt.
+Zusaetzlich als Referenz die Heuristik selbst: sie spielt in Unten nie das Ass an
+(blunder ~0% per Konstruktion). Modell-blunder hoch bei Heuristik-blunder ~0
+heisst: das NN driftet vom sauberen Anspiel ab (Unterfit), nicht "Anspiel ist
+inhaerent mehrdeutig".
 
 Lauf (WSL2, conda-env jass-gpu):
     python -m scripts.probe_lead_sweep
     python -m scripts.probe_lead_sweep --n 1000 --seed 7
-    python -m scripts.probe_lead_sweep --dry-run   # ohne TF: nur Stellungs-/Encoding-Check
+    python -m scripts.probe_lead_sweep --dry-run   # ohne TF: nur Stellungs-/Encoding-/Heuristik-Check
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ import numpy as np
 from jass_engine.card import ALL_RANKS, ALL_SUITS, Card, Rank
 from jass_engine.player import GameState
 from jass_engine.variant import Announcement, Variant
+from players.heuristic_player import HeuristicPlayer
 from training.encoder import encode_state, index_to_card, legal_action_mask
 
 FULL_DECK = [Card(s, r) for s in ALL_SUITS for r in ALL_RANKS]
@@ -60,6 +65,11 @@ def lead_state(variant: Variant) -> GameState:
     )
 
 
+def card_index(card: Card) -> int:
+    """Karten-Index 0..35 (suit * 9 + rank), wie im Encoder."""
+    return int(card.suit) * 9 + int(card.rank)
+
+
 def policy_batch(model, x_batch, m_batch):
     pred = model({"state": x_batch, "mask": m_batch}, training=False)
     if isinstance(pred, dict):
@@ -81,23 +91,30 @@ def main() -> None:
 
     rng = random.Random(args.seed)
     hands = [rng.sample(FULL_DECK, HAND_SIZE) for _ in range(args.n)]
+    heur = HeuristicPlayer("ref")  # deterministische, domaenenkorrekte Referenz
 
-    # Pro Modus: alle States encoden (Batch-Arrays vorbereiten).
+    # Pro Modus: States encoden + Heuristik-Anspiel als Referenz bestimmen.
     encoded = {}
     for name, cfg in MODES.items():
         st = lead_state(cfg["factory"]())
         x = np.stack([encode_state(h, st).astype(np.float32) for h in hands])
         m = np.stack([legal_action_mask(h, st).astype(np.float32) for h in hands])
-        encoded[name] = (x, m)
+        heur_cards = [heur.choose_card(h, st) for h in hands]
+        encoded[name] = (x, m, heur_cards)
 
     print(f"N={args.n} zufaellige Anspiel-Stellungen (Stich 0), Seed={args.seed}.")
     print("Beispiel-Hand:", ", ".join(str(c) for c in sorted(hands[0])))
 
     if args.dry_run:
-        for name in MODES:
-            x, m = encoded[name]
-            print(f"  {name}: X{tuple(x.shape)} M{tuple(m.shape)}  legale Karten Hand[0]: {int(m[0].sum())}")
-        print("\n[--dry-run] States + Encoding gebaut. Kein Modell geladen.")
+        for name, cfg in MODES.items():
+            x, m, heur_cards = encoded[name]
+            worst_i = int(cfg["worst"])
+            hb = float(np.mean([int(c.rank) == worst_i for c in heur_cards])) * 100
+            print(
+                f"  {name}: X{tuple(x.shape)} M{tuple(m.shape)}  "
+                f"Heuristik-blunder {hb:.1f}%  (Anspiel Hand[0]: {heur_cards[0]})"
+            )
+        print("\n[--dry-run] States + Encoding + Heuristik-Referenz gebaut. Kein Modell geladen.")
         return
 
     from tensorflow import keras  # noqa: PLC0415  (lazy -> --dry-run bleibt TF-frei)
@@ -108,7 +125,7 @@ def main() -> None:
     print(f"Modell: {args.model}\n")
 
     # Einzelfall-Anschauung (Hand[0], Unten), damit man die Verteilung konkret sieht.
-    x0, m0 = encoded["unten"]
+    x0, m0, _ = encoded["unten"]
     p0 = policy_batch(model, x0[:1], m0[:1])[0] * m0[0]
     legal0 = sorted((i for i in range(36) if m0[0, i] > 0.5), key=lambda i: p0[i], reverse=True)
     print("Beispiel (Hand[0], UNTEN) -- Policy ueber legale Karten, absteigend:")
@@ -116,11 +133,15 @@ def main() -> None:
         print(f"    {str(index_to_card(i)):14s} p={float(p0[i]):.4f}")
     print()
 
-    header = f"{'Modus':6s} {'blunder':>9s} {'strongmass':>11s} {'badmass':>9s} {'mean_top1':>10s}"
+    header = (
+        f"{'Modus':6s} {'blunder':>9s} {'strongmass':>11s} {'badmass':>9s} "
+        f"{'mean_top1':>10s} {'agree_Heur':>11s}"
+    )
     print(header)
     print("-" * len(header))
+    ref_lines = []
     for name, cfg in MODES.items():
-        x, m = encoded[name]
+        x, m, heur_cards = encoded[name]
         worst_i = int(cfg["worst"])
         strong_ints = {int(r) for r in cfg["strong"]}
         is_strong = np.array([(i % 9) in strong_ints for i in range(36)], dtype=np.float32)
@@ -128,14 +149,26 @@ def main() -> None:
 
         masked = policy_batch(model, x, m) * m                 # (N, 36), nur legale
         arg = masked.argmax(axis=1)                            # was die App spielt
+        heur_idx = np.array([card_index(c) for c in heur_cards])
         blunder = float(np.mean((arg % 9) == worst_i)) * 100
         strongmass = float((masked * is_strong).sum(axis=1).mean()) * 100
         badmass = float((masked * is_worst).sum(axis=1).mean()) * 100
         top1 = float(masked.max(axis=1).mean())
-        print(f"{name:6s} {blunder:8.1f}% {strongmass:10.1f}% {badmass:8.1f}% {top1:10.4f}")
+        agree = float(np.mean(arg == heur_idx)) * 100
+        print(
+            f"{name:6s} {blunder:8.1f}% {strongmass:10.1f}% {badmass:8.1f}% "
+            f"{top1:10.4f} {agree:10.1f}%"
+        )
 
-    print("\nLesehilfe: hohe blunder-/badmass-Rate + niedrige strongmass + niedriges")
-    print("mean_top1 in UNTEN gegenueber OBEN  =>  invertierte-Modi-Schwaeche bestaetigt.")
+        hb = float(np.mean([int(c.rank) == worst_i for c in heur_cards])) * 100
+        hs = float(np.mean([int(c.rank) in strong_ints for c in heur_cards])) * 100
+        ref_lines.append(f"  {name:6s} blunder {hb:5.1f}%   strong-Anspiel {hs:5.1f}%")
+
+    print("\nReferenz HeuristicPlayer (deterministisch, domaenenkorrekt):")
+    for line in ref_lines:
+        print(line)
+    print("\nLesehilfe: 'agree_Heur' = wie oft das NN-argMax die rule-korrekte Karte trifft.")
+    print("Modell-blunder hoch bei Heuristik-blunder ~0  =>  das NN driftet vom sauberen Anspiel ab.")
 
 
 if __name__ == "__main__":
